@@ -285,7 +285,7 @@ model BodyMeasurement {
 
 model Exercise {
   id              String              @id @default(cuid())
-  name            String
+  name            String              @unique
   nameIt          String?
   category        ExerciseCategory
   muscleGroups    MuscleGroup[]

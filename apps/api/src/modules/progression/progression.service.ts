@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { ProgressionAction } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -63,7 +64,10 @@ export class ProgressionService {
     });
   }
 
-  private makeProgressionDecision(recentSets: any[], planExercise: any) {
+  private makeProgressionDecision(
+    recentSets: any[],
+    planExercise: any,
+  ): { action: ProgressionAction; oldWeight?: number; newWeight?: number; reasoning: string } {
     const avgRpe = recentSets.reduce((a, s) => a + (s.rpe || 7), 0) / recentSets.length;
     const avgReps = recentSets.reduce((a, s) => a + s.reps, 0) / recentSets.length;
     const avgWeight = recentSets.reduce((a, s) => a + s.weightKg, 0) / recentSets.length;
