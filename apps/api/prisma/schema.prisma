@@ -182,6 +182,19 @@ enum ProgressionAction {
   CHANGE_EXERCISE
 }
 
+enum AdjustmentType {
+  WEIGHT_INCREASE
+  WEIGHT_DECREASE
+  REPS_INCREASE
+  REPS_DECREASE
+  SETS_INCREASE
+  SETS_DECREASE
+  DELOAD
+  DELOAD_END
+  EXERCISE_SWAP
+  RPE_ADJUST
+}
+
 model User {
   id              String           @id @default(cuid())
   email           String           @unique
@@ -212,9 +225,11 @@ model User {
   progressPhotos  ProgressPhoto[]
   videoAnalyses   VideoAnalysis[]
   weeklyChecks    WeeklyNutritionCheck[]
-  progressions    AIProgressionDecision[]
-  exercise1RMs    Exercise1RM[]
-  createdExercises Exercise[]      @relation("ExerciseCreator")
+  progressions        AIProgressionDecision[]
+  programVersions     ProgramVersion[]
+  programAdjustments  ProgramAdjustment[]
+  exercise1RMs        Exercise1RM[]
+  createdExercises    Exercise[]      @relation("ExerciseCreator")
 
   trainerClients  TrainerClient[]  @relation("TrainerToClient")
   clientOf        TrainerClient[]  @relation("ClientToTrainer")
@@ -335,9 +350,11 @@ model WorkoutPlan {
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
-  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  days    WorkoutDay[]
-  sessions WorkoutSession[]
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  days        WorkoutDay[]
+  sessions    WorkoutSession[]
+  versions    ProgramVersion[]
+  adjustments ProgramAdjustment[]
 
   @@index([userId])
   @@map("workout_plans")
@@ -361,21 +378,24 @@ model WorkoutDay {
 }
 
 model WorkoutExercise {
-  id           String  @id @default(cuid())
-  dayId        String
-  exerciseId   String
-  order        Int
-  sets         Int
-  repsMin      Int
-  repsMax      Int
-  rpeTarget    Float?
-  rirTarget    Int?
-  restSeconds  Int     @default(90)
-  notes        String?
-  supersetGroup String?
+  id                  String  @id @default(cuid())
+  dayId               String
+  exerciseId          String
+  order               Int
+  sets                Int
+  repsMin             Int
+  repsMax             Int
+  rpeTarget           Float?
+  rirTarget           Int?
+  restSeconds         Int     @default(90)
+  notes               String?
+  supersetGroup       String?
+  recommendedWeightKg Float?
+  deloadActive        Boolean @default(false)
 
-  day      WorkoutDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  exercise Exercise   @relation(fields: [exerciseId], references: [id])
+  day         WorkoutDay          @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  exercise    Exercise             @relation(fields: [exerciseId], references: [id])
+  adjustments ProgramAdjustment[]
 
   @@index([dayId])
   @@map("workout_exercises")
@@ -444,25 +464,77 @@ model Exercise1RM {
 }
 
 model AIProgressionDecision {
-  id           String            @id @default(cuid())
-  userId       String
-  exerciseId   String
-  action       ProgressionAction
-  oldWeight    Float?
-  newWeight    Float?
-  oldReps      Int?
-  newReps      Int?
-  reasoning    String
-  isRead       Boolean           @default(false)
-  evidenceData Json?
-  appliedAt    DateTime          @default(now())
+  id                 String            @id @default(cuid())
+  userId             String
+  exerciseId         String
+  action             ProgressionAction
+  oldWeight          Float?
+  newWeight          Float?
+  oldReps            Int?
+  newReps            Int?
+  reasoning          String
+  isRead             Boolean           @default(false)
+  isApplied          Boolean           @default(false)
+  appliedToVersionId String?
+  evidenceData       Json?
+  appliedAt          DateTime          @default(now())
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  exercise Exercise @relation(fields: [exerciseId], references: [id])
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise    Exercise             @relation(fields: [exerciseId], references: [id])
+  adjustments ProgramAdjustment[]
 
   @@index([userId])
   @@index([userId, isRead])
+  @@index([userId, isApplied])
   @@map("ai_progression_decisions")
+}
+
+model ProgramVersion {
+  id            String   @id @default(cuid())
+  userId        String
+  planId        String
+  versionNumber Int
+  snapshot      Json
+  triggerReason String
+  createdAt     DateTime @default(now())
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan        WorkoutPlan        @relation(fields: [planId], references: [id], onDelete: Cascade)
+  adjustments ProgramAdjustment[]
+
+  @@index([planId])
+  @@index([userId])
+  @@map("program_versions")
+}
+
+model ProgramAdjustment {
+  id              String         @id @default(cuid())
+  userId          String
+  planId          String
+  planExerciseId  String?
+  versionId       String
+  decisionId      String?
+  type            AdjustmentType
+  field           String
+  oldValue        Json
+  newValue        Json
+  rationale       String
+  isReverted      Boolean        @default(false)
+  revertedAt      DateTime?
+  revertAfterDate DateTime?
+  appliedAt       DateTime       @default(now())
+
+  user         User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan         WorkoutPlan             @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planExercise WorkoutExercise?        @relation(fields: [planExerciseId], references: [id])
+  version      ProgramVersion          @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  decision     AIProgressionDecision?  @relation(fields: [decisionId], references: [id])
+
+  @@index([planId])
+  @@index([planExerciseId])
+  @@index([decisionId])
+  @@index([revertAfterDate])
+  @@map("program_adjustments")
 }
 
 model NutritionPlan {
