@@ -9,8 +9,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
-import { authApi } from '@/lib/api';
+import { authApi, progressionApi } from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -26,6 +27,18 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const router = useRouter();
+
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ['progression-unread-count'],
+    queryFn: async () => {
+      const res = await progressionApi.getUnreadCount() as any;
+      return res.data;
+    },
+    staleTime: 60_000,
+    enabled: !!user,
+  });
+
+  const insightBadge = (unreadData?.count ?? 0) > 0 ? unreadData!.count : null;
 
   const handleLogout = async () => {
     await authApi.logout().catch(() => {});
@@ -65,6 +78,11 @@ export function Sidebar() {
                   >
                     <item.icon className={cn('w-5 h-5', isActive && 'text-primary')} />
                     <span>{item.label}</span>
+                    {item.href === '/progress' && insightBadge && !isActive && (
+                      <span className="ml-auto text-[10px] font-bold text-white bg-primary px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none shadow-sm shadow-primary/40">
+                        {insightBadge > 9 ? '9+' : insightBadge}
+                      </span>
+                    )}
                     {isActive && <ChevronRight className="w-3.5 h-3.5 ml-auto text-primary" />}
                   </motion.div>
                 </Link>

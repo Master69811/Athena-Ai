@@ -307,10 +307,11 @@ model Exercise {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
-  creator         User?               @relation("ExerciseCreator", fields: [creatorId], references: [id])
-  workoutExercises WorkoutExercise[]
-  sets            WorkoutSet[]
-  exercise1RMs    Exercise1RM[]
+  creator              User?                   @relation("ExerciseCreator", fields: [creatorId], references: [id])
+  workoutExercises     WorkoutExercise[]
+  sets                 WorkoutSet[]
+  exercise1RMs         Exercise1RM[]
+  progressionDecisions AIProgressionDecision[]
 
   @@index([name])
   @@index([category])
@@ -443,20 +444,24 @@ model Exercise1RM {
 }
 
 model AIProgressionDecision {
-  id          String            @id @default(cuid())
-  userId      String
-  exerciseId  String
-  action      ProgressionAction
-  oldWeight   Float?
-  newWeight   Float?
-  oldReps     Int?
-  newReps     Int?
-  reasoning   String
-  appliedAt   DateTime          @default(now())
+  id           String            @id @default(cuid())
+  userId       String
+  exerciseId   String
+  action       ProgressionAction
+  oldWeight    Float?
+  newWeight    Float?
+  oldReps      Int?
+  newReps      Int?
+  reasoning    String
+  isRead       Boolean           @default(false)
+  evidenceData Json?
+  appliedAt    DateTime          @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id])
 
   @@index([userId])
+  @@index([userId, isRead])
   @@map("ai_progression_decisions")
 }
 

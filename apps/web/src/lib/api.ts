@@ -116,4 +116,9 @@ export const exercisesApi = {
 export const progressionApi = {
   getHistory: (limit?: number) => api.get('/progression/history', { params: { limit } }),
   run: () => api.post('/progression/run'),
+  getInsights: (params?: { limit?: number; unreadOnly?: boolean }) =>
+    api.get('/progression/insights', { params }),
+  getUnreadCount: () => api.get('/progression/insights/unread-count'),
+  markRead: (id: string) => api.put(`/progression/insights/${id}/read`),
+  markAllRead: () => api.put('/progression/insights/read-all'),
 };

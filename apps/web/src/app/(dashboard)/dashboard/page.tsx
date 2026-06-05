@@ -2,17 +2,17 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { usersApi, workoutApi, recoveryApi, nutritionApi } from '@/lib/api';
+import { usersApi, workoutApi, recoveryApi, nutritionApi, progressionApi } from '@/lib/api';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer,
-  RadialBarChart, RadialBar, PieChart, Pie, Cell, Tooltip,
+  AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip,
 } from 'recharts';
 import { Flame, Dumbbell, TrendingUp, Zap, ChevronRight, Brain, Activity } from 'lucide-react';
 import Link from 'next/link';
 import { getRecoveryColor, getRecoveryLabel, formatWeight } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
+import { InsightCard, type ProgressionInsight } from '@/components/progression/insight-card';
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -50,6 +50,26 @@ export default function DashboardPage() {
     queryFn: () => nutritionApi.getDailyLog(new Date().toISOString().split('T')[0]),
     select: (res: any) => res.data,
   });
+
+  const { data: latestInsights } = useQuery<ProgressionInsight[]>({
+    queryKey: ['progression-insights-dashboard'],
+    queryFn: async () => {
+      const res = await progressionApi.getInsights({ limit: 3, unreadOnly: false }) as any;
+      return res.data;
+    },
+    staleTime: 60_000,
+  });
+
+  const { data: unreadCountData } = useQuery<{ count: number }>({
+    queryKey: ['progression-unread-count'],
+    queryFn: async () => {
+      const res = await progressionApi.getUnreadCount() as any;
+      return res.data;
+    },
+    staleTime: 60_000,
+  });
+
+  const unreadCount = unreadCountData?.count ?? 0;
 
   const recoveryScore = recovery?.score || 75;
   const recoveryColor = getRecoveryColor(recoveryScore);
@@ -114,8 +134,37 @@ export default function DashboardPage() {
         />
       </motion.div>
 
+      {/* Athena Insights widget */}
+      {latestInsights && latestInsights.length > 0 && (
+        <motion.div variants={fadeInUp}>
+          <Card className="border-primary/20">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-primary" />
+                  <CardTitle>Insight di Athena</CardTitle>
+                  {unreadCount > 0 && (
+                    <span className="text-xs font-bold text-white bg-primary px-2 py-0.5 rounded-full shadow-sm shadow-primary/40">
+                      {unreadCount} nuovi
+                    </span>
+                  )}
+                </div>
+                <Link href="/progress/insights" className="text-xs text-primary hover:underline flex items-center gap-1">
+                  Vedi tutti <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </CardHeader>
+            <div className="space-y-3">
+              {latestInsights.slice(0, 2).map((insight) => (
+                <InsightCard key={insight.id} insight={insight} compact />
+              ))}
+            </div>
+          </Card>
+        </motion.div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Weight Trend Chart */}
         <motion.div variants={fadeInUp} className="lg:col-span-2">
           <Card>
