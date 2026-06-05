@@ -9,7 +9,7 @@ import { TrendingUp, Scale, Camera } from 'lucide-react';
 export default function ProgressPage() {
   const { data: measurements } = useQuery({
     queryKey: ['measurements'],
-    queryFn: usersApi.getMeasurements,
+    queryFn: () => usersApi.getMeasurements(),
     select: (res: any) => res.data as any[],
   });
 

@@ -108,7 +108,7 @@ export default function DashboardPage() {
     queryKey: ['weight-snapshot'],
     queryFn: async () => {
       const res = await bodyWeightApi.getSnapshot() as any;
-      return res.data as { ma7d: number; ma14d: number; weeklyRateKg: number; pred4wKg: number; trendDirection: string } | null;
+      return res.data as { ma7d: number; ma14d: number; weeklyRateKg: number; pred4wKg: number; pred12wKg: number | null; trendDirection: string } | null;
     },
     staleTime: 5 * 60_000,
   });
