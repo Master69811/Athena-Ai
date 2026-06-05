@@ -132,6 +132,13 @@ export const nutritionEngineApi = {
   getCompliance: () => api.get('/nutrition-engine/compliance'),
 };
 
+// Gamification
+export const gamificationApi = {
+  getAchievements: () => api.get('/gamification/achievements'),
+  getStreaks: () => api.get('/gamification/streaks'),
+  check: () => api.post('/gamification/check'),
+};
+
 // Progression
 export const progressionApi = {
   getHistory: (limit?: number) => api.get('/progression/history', { params: { limit } }),

@@ -17,6 +17,10 @@ const MEAL_TYPES = [
   { value: 'SNACK', label: 'Spuntino' },
 ];
 
+const MEAL_LABELS: Record<string, string> = {
+  BREAKFAST: 'Colazione', LUNCH: 'Pranzo', DINNER: 'Cena', SNACK: 'Spuntino',
+};
+
 function NutritionSkeleton() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-pulse">
@@ -140,7 +144,7 @@ export default function NutritionPage() {
                 { label: 'Grassi',      value: Math.round(plan.fatG),       unit: 'g',    color: '#10b981' },
               ].map(m => (
                 <div key={m.label} className="text-center py-1">
-                  <p className="text-2xl font-bold tabular-nums" style={{ color: m.color }}>{m.value}</p>
+                  <p className="text-xl sm:text-2xl font-bold tabular-nums" style={{ color: m.color }}>{m.value}</p>
                   <p className="text-xs text-muted-foreground">{m.unit}</p>
                   <p className="text-xs font-medium mt-0.5">{m.label}</p>
                 </div>
@@ -191,9 +195,34 @@ export default function NutritionPage() {
                         style={{ background: m.color }}
                       />
                     </div>
+                    <p className="text-[11px] text-muted-foreground text-right mt-0.5 tabular-nums">
+                      {m.target > 0 ? Math.round((m.consumed / m.target) * 100) : 0}%
+                    </p>
                   </div>
                 ))}
               </div>
+
+              {/* Pasti registrati oggi */}
+              {Array.isArray(dailyLog?.logs) && dailyLog.logs.length > 0 && (
+                <div className="mt-5 pt-5 border-t border-border/50">
+                  <p className="text-xs font-semibold text-muted-foreground mb-3">PASTI DI OGGI</p>
+                  <div className="space-y-2">
+                    {dailyLog.logs.map((log: any) => (
+                      <div key={log.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/40">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{log.foodItem?.name ?? 'Alimento'}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {MEAL_LABELS[log.mealType] ?? log.mealType} · {log.servings} {log.servings === 1 ? 'porzione' : 'porzioni'}
+                          </p>
+                        </div>
+                        <span className="text-sm font-semibold tabular-nums text-muted-foreground flex-shrink-0 ml-3">
+                          {Math.round((log.foodItem?.calories ?? 0) * log.servings)} kcal
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Card>
           ) : (
             /* Empty state: piano presente, nessun pasto registrato oggi */

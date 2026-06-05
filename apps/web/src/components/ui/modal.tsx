@@ -48,7 +48,7 @@ export function Modal({ open, onClose, title, description, children }: ModalProp
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-            className="relative w-full sm:max-w-md glass-card-elevated rounded-t-3xl sm:rounded-3xl p-6 max-h-[90vh] overflow-y-auto"
+            className="relative w-full sm:max-w-md lg:max-w-lg glass-card-elevated rounded-t-3xl sm:rounded-3xl p-6 max-h-[90vh] overflow-y-auto"
           >
             <div className="flex items-start justify-between mb-4">
               <div>

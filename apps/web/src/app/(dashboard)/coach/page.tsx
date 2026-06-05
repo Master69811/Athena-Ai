@@ -115,7 +115,7 @@ export default function CoachPage() {
         <AnimatePresence>
           {messages.map((msg, i) => (
             <motion.div
-              key={i}
+              key={msg.id ?? `${msg.role}-${i}`}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className={cn('flex gap-3', msg.role === 'USER' ? 'flex-row-reverse' : 'flex-row')}

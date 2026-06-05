@@ -1,16 +1,20 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { usersApi, workoutApi, recoveryApi, nutritionApi, progressionApi, bodyWeightApi, nutritionEngineApi } from '@/lib/api';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Modal } from '@/components/ui/modal';
+import { RecoveryModal } from '@/components/recovery/RecoveryModal';
 import {
   AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip,
 } from 'recharts';
-import { Flame, Dumbbell, TrendingUp, Zap, ChevronRight, Brain, Activity, Scale, Utensils, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Flame, Dumbbell, TrendingUp, Zap, ChevronRight, Brain, Activity, Scale, Utensils, AlertTriangle, HeartPulse } from 'lucide-react';
 import Link from 'next/link';
-import { getRecoveryColor, getRecoveryLabel, formatWeight } from '@/lib/utils';
+import { toast } from 'sonner';
+import { getRecoveryColor, getRecoveryLabel } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { InsightCard, type ProgressionInsight } from '@/components/progression/insight-card';
 
@@ -71,6 +75,19 @@ function DashboardSkeleton() {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+
+  const applyDecisionMutation = useMutation({
+    mutationFn: (id: string) => nutritionEngineApi.applyDecision(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nutrition-decisions-dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['nutrition-plan'] });
+      queryClient.invalidateQueries({ queryKey: ['nutrition-today'] });
+      toast.success('Decisione applicata — piano nutrizionale aggiornato!');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Errore nell\'applicare la decisione'),
+  });
 
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
     queryKey: ['dashboard'],
@@ -148,9 +165,9 @@ export default function DashboardPage() {
 
   const macroData = todayNutrition?.totals
     ? [
-        { name: 'Proteine', value: todayNutrition.totals.protein.consumed, target: todayNutrition.totals.protein.target, color: '#6366f1' },
-        { name: 'Carboidrati', value: todayNutrition.totals.carbs.consumed, target: todayNutrition.totals.carbs.target, color: '#8b5cf6' },
-        { name: 'Grassi', value: todayNutrition.totals.fat.consumed, target: todayNutrition.totals.fat.target, color: '#06b6d4' },
+        { name: 'Proteine', value: todayNutrition.totals.protein?.consumed ?? 0, target: todayNutrition.totals.protein?.target ?? 0, color: '#6366f1' },
+        { name: 'Carboidrati', value: todayNutrition.totals.carbs?.consumed ?? 0, target: todayNutrition.totals.carbs?.target ?? 0, color: '#8b5cf6' },
+        { name: 'Grassi', value: todayNutrition.totals.fat?.consumed ?? 0, target: todayNutrition.totals.fat?.target ?? 0, color: '#06b6d4' },
       ]
     : [];
 
@@ -255,15 +272,15 @@ export default function DashboardPage() {
                 </CardHeader>
                 <div className="grid grid-cols-3 gap-3 mb-3">
                   <div className="text-center">
-                    <p className="text-xs text-muted-foreground">Media 7g</p>
+                    <p className="text-xs text-muted-foreground">Media 7gg</p>
                     <p className="text-lg font-bold text-foreground">{weightSnapshot.ma7d.toFixed(1)}kg</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs text-muted-foreground">Media 14g</p>
+                    <p className="text-xs text-muted-foreground">Media 14gg</p>
                     <p className="text-lg font-bold text-foreground">{weightSnapshot.ma14d.toFixed(1)}kg</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs text-muted-foreground">Tasso/sett</p>
+                    <p className="text-xs text-muted-foreground">Tasso/sett.</p>
                     <p className={`text-lg font-bold ${weightSnapshot.weeklyRateKg < 0 ? 'text-green-400' : weightSnapshot.weeklyRateKg > 0 ? 'text-orange-400' : 'text-foreground'}`}>
                       {weightSnapshot.weeklyRateKg > 0 ? '+' : ''}{weightSnapshot.weeklyRateKg.toFixed(2)}kg
                     </p>
@@ -299,9 +316,14 @@ export default function DashboardPage() {
                   <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{dec.rationale}</p>
                   <div className="flex items-center justify-between mt-3">
                     <span className="text-xs text-muted-foreground">{new Date(dec.createdAt).toLocaleDateString('it-IT')}</span>
-                    <Link href="/nutrition" className="text-xs text-primary hover:underline flex items-center gap-1">
-                      Applica <ChevronRight className="w-3.5 h-3.5" />
-                    </Link>
+                    <Button
+                      variant="gradient"
+                      size="sm"
+                      loading={applyDecisionMutation.isPending}
+                      onClick={() => applyDecisionMutation.mutate(dec.id)}
+                    >
+                      Applica al piano
+                    </Button>
                   </div>
                 </Card>
               </motion.div>
@@ -382,6 +404,10 @@ export default function DashboardPage() {
                 {ENGINE_ACTION_LABELS[recoverySnapshot.engineAction] ?? recoverySnapshot.engineAction}
               </div>
             )}
+            <Button variant="outline" size="sm" className="mt-1 gap-1.5" onClick={() => setRecoveryOpen(true)}>
+              <HeartPulse className="w-4 h-4" />
+              Registra recupero
+            </Button>
           </Card>
         </motion.div>
       </div>
@@ -390,7 +416,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Macros */}
-        {todayNutrition && (
+        {todayNutrition?.totals && (
           <motion.div variants={fadeInUp}>
             <Card>
               <CardHeader>
@@ -474,6 +500,8 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
       </div>
+
+      <RecoveryModal open={recoveryOpen} onClose={() => setRecoveryOpen(false)} />
     </motion.div>
   );
 }

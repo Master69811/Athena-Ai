@@ -32,7 +32,7 @@ export default function ProgressPage() {
   const { data: measurements, isLoading } = useQuery({
     queryKey: ['measurements'],
     queryFn: () => usersApi.getMeasurements(),
-    select: (res: any) => res.data as any[],
+    select: (res: any) => (Array.isArray(res?.data) ? res.data : []) as any[],
   });
 
   const addMutation = useMutation({
@@ -142,7 +142,7 @@ export default function ProgressPage() {
           {measurements && measurements.length > 0 ? (
             <div className="space-y-2">
               {measurements.slice(0, 5).map((m: any, i: number) => (
-                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
+                <div key={m.id ?? `${m.date}-${i}`} className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
                   <span className="text-sm text-muted-foreground">
                     {new Date(m.date).toLocaleDateString('it-IT')}
                   </span>

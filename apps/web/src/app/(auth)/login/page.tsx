@@ -43,7 +43,12 @@ export default function LoginPage() {
       toast.success(`Bentornato, ${user.profile?.name || user.email}!`);
       router.push(user.profile?.onboardingCompleted ? '/dashboard' : '/onboarding');
     } catch (err: any) {
-      toast.error(err.message || 'Credenziali non valide');
+      const status = err?.statusCode || err?.status;
+      if (status === 401 || status === 400) {
+        toast.error('Email o password errati');
+      } else {
+        toast.error(err?.message || 'Errore di connessione, riprova');
+      }
     } finally {
       setLoading(false);
     }
