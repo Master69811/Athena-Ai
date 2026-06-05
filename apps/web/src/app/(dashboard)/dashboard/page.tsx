@@ -14,6 +14,20 @@ import { getRecoveryColor, getRecoveryLabel, formatWeight } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { InsightCard, type ProgressionInsight } from '@/components/progression/insight-card';
 
+const ENGINE_ACTION_STYLES: Record<string, string> = {
+  PROCEED: 'bg-green-500/10 text-green-400 border-green-500/20',
+  CAUTION: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+  HOLD: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+  DELOAD: 'bg-red-500/10 text-red-400 border-red-500/20',
+};
+
+const ENGINE_ACTION_LABELS: Record<string, string> = {
+  PROCEED: 'Aumenta carico',
+  CAUTION: 'Cautela',
+  HOLD: 'Progressione sospesa',
+  DELOAD: 'Deload attivo',
+};
+
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
   animate: { opacity: 1, y: 0 },
@@ -67,6 +81,15 @@ export default function DashboardPage() {
       return res.data;
     },
     staleTime: 60_000,
+  });
+
+  const { data: recoverySnapshot } = useQuery({
+    queryKey: ['recovery-snapshot'],
+    queryFn: async () => {
+      const res = await recoveryApi.getSnapshot() as any;
+      return res.data as { engineAction: string; avgScore: number; trendDirection: string } | null;
+    },
+    staleTime: 5 * 60_000,
   });
 
   const unreadCount = unreadCountData?.count ?? 0;
@@ -223,6 +246,11 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground text-center px-4 leading-relaxed">
               {recovery?.recommendation || 'Registra il tuo recupero giornaliero'}
             </p>
+            {recoverySnapshot && (
+              <div className={`text-xs px-3 py-1 rounded-full font-semibold border ${ENGINE_ACTION_STYLES[recoverySnapshot.engineAction] ?? 'bg-muted text-muted-foreground border-border'}`}>
+                {ENGINE_ACTION_LABELS[recoverySnapshot.engineAction] ?? recoverySnapshot.engineAction}
+              </div>
+            )}
           </Card>
         </motion.div>
       </div>

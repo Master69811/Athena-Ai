@@ -6,8 +6,9 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { AdjustmentType } from '@prisma/client';
+import { AdjustmentType, EngineAction } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { RecoveryService, RecoveryEngineContext } from '../recovery/recovery.service';
 
 const BATCH_SIZE = 100;
 const MAX_SETS = 6;
@@ -19,7 +20,10 @@ const DELOAD_DAYS = 7;
 export class ProgramAdjustmentService {
   private readonly logger = new Logger(ProgramAdjustmentService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private recoveryService: RecoveryService,
+  ) {}
 
   // ─── Scheduled jobs ────────────────────────────────────────────────────────
 
@@ -95,7 +99,15 @@ export class ProgramAdjustmentService {
 
     if (decisions.length === 0) return { applied: 0, versionId: null, adjustments: [] };
 
-    const version = await this.createVersion(userId, plan, 'Adaptive Program Engine — weekly auto-apply');
+    const recoveryCtx = await this.recoveryService.getRecoveryContextForEngine(userId);
+
+    const version = await this.createVersion(
+      userId,
+      plan,
+      recoveryCtx.hasEnoughData
+        ? `Adaptive Program Engine — ${recoveryCtx.engineAction} (Recovery Score ${recoveryCtx.avgScore7d}/100)`
+        : 'Adaptive Program Engine — weekly auto-apply',
+    );
 
     const adjustments: any[] = [];
     for (const decision of decisions) {
@@ -108,6 +120,7 @@ export class ProgramAdjustmentService {
         planExercise,
         version.id,
         decision,
+        recoveryCtx,
       );
       adjustments.push(...newAdj);
 
@@ -118,7 +131,7 @@ export class ProgramAdjustmentService {
     }
 
     this.logger.log(
-      `Applied ${adjustments.length} adjustments to plan ${plan.id} (version ${version.versionNumber}).`,
+      `Applied ${adjustments.length} adjustments to plan ${plan.id} (version ${version.versionNumber}). Recovery: ${recoveryCtx.engineAction}.`,
     );
 
     return { applied: adjustments.length, versionId: version.id, adjustments };
@@ -177,27 +190,28 @@ export class ProgramAdjustmentService {
     planExercise: any,
     versionId: string,
     decision: any,
+    recoveryCtx?: RecoveryEngineContext,
   ): Promise<any[]> {
     switch (decision.action) {
-      case 'INCREASE_WEIGHT':
-        return this.applyWeightChange(
-          userId,
-          planId,
-          planExercise,
-          versionId,
-          decision,
-          'WEIGHT_INCREASE',
-        );
+      case 'INCREASE_WEIGHT': {
+        if (recoveryCtx?.hasEnoughData) {
+          if (recoveryCtx.engineAction === EngineAction.DELOAD)
+            return this.applyDeload(userId, planId, planExercise, versionId, {
+              ...decision,
+              reasoning: `[Override recupero critico] ${recoveryCtx.summary}`,
+            });
+          if (recoveryCtx.engineAction === EngineAction.HOLD)
+            return [await this.createProgressionHeld(userId, planId, planExercise, versionId, decision, recoveryCtx)];
+        }
+        const rationaleW =
+          recoveryCtx?.hasEnoughData && recoveryCtx.engineAction === EngineAction.CAUTION
+            ? `${decision.reasoning} (${recoveryCtx.summary})`
+            : decision.reasoning;
+        return this.applyWeightChange(userId, planId, planExercise, versionId, { ...decision, reasoning: rationaleW }, 'WEIGHT_INCREASE');
+      }
 
       case 'DECREASE_WEIGHT':
-        return this.applyWeightChange(
-          userId,
-          planId,
-          planExercise,
-          versionId,
-          decision,
-          'WEIGHT_DECREASE',
-        );
+        return this.applyWeightChange(userId, planId, planExercise, versionId, decision, 'WEIGHT_DECREASE');
 
       case 'DELOAD':
         return this.applyDeload(userId, planId, planExercise, versionId, decision);
@@ -205,26 +219,50 @@ export class ProgramAdjustmentService {
       case 'CHANGE_EXERCISE':
         return this.applyExerciseSwap(userId, planId, planExercise, versionId, decision);
 
-      case 'INCREASE_REPS':
-        return this.applyRepsChange(userId, planId, planExercise, versionId, decision, 1);
-
-      case 'DECREASE_WEIGHT':
-        return this.applyWeightChange(userId, planId, planExercise, versionId, decision, 'WEIGHT_DECREASE');
+      case 'INCREASE_REPS': {
+        if (recoveryCtx?.hasEnoughData) {
+          if (recoveryCtx.engineAction === EngineAction.DELOAD)
+            return this.applyDeload(userId, planId, planExercise, versionId, {
+              ...decision,
+              reasoning: `[Override recupero critico] ${recoveryCtx.summary}`,
+            });
+          if (recoveryCtx.engineAction === EngineAction.HOLD)
+            return [await this.createProgressionHeld(userId, planId, planExercise, versionId, decision, recoveryCtx)];
+        }
+        const rationaleR =
+          recoveryCtx?.hasEnoughData && recoveryCtx.engineAction === EngineAction.CAUTION
+            ? `${decision.reasoning} (${recoveryCtx.summary})`
+            : decision.reasoning;
+        return this.applyRepsChange(userId, planId, planExercise, versionId, { ...decision, reasoning: rationaleR }, 1);
+      }
 
       case 'INCREASE_SETS': {
+        if (recoveryCtx?.hasEnoughData) {
+          if (recoveryCtx.engineAction === EngineAction.DELOAD)
+            return this.applyDeload(userId, planId, planExercise, versionId, {
+              ...decision,
+              reasoning: `[Override recupero critico] ${recoveryCtx.summary}`,
+            });
+          if (recoveryCtx.engineAction === EngineAction.HOLD)
+            return [await this.createProgressionHeld(userId, planId, planExercise, versionId, decision, recoveryCtx)];
+        }
         const newSets = Math.min(planExercise.sets + 1, MAX_SETS);
         if (newSets === planExercise.sets) return [];
         await this.prisma.workoutExercise.update({
           where: { id: planExercise.id },
           data: { sets: newSets },
         });
+        const rationaleS =
+          recoveryCtx?.hasEnoughData && recoveryCtx.engineAction === EngineAction.CAUTION
+            ? `${decision.reasoning} (${recoveryCtx.summary})`
+            : decision.reasoning;
         return [
           await this.createAdjustment(userId, planId, planExercise.id, versionId, decision.id, {
             type: 'SETS_INCREASE',
             field: 'sets',
             oldValue: { value: planExercise.sets },
             newValue: { value: newSets },
-            rationale: decision.reasoning,
+            rationale: rationaleS,
           }),
         ];
       }
@@ -233,6 +271,24 @@ export class ProgramAdjustmentService {
       default:
         return [];
     }
+  }
+
+  private async createProgressionHeld(
+    userId: string,
+    planId: string,
+    planExercise: any,
+    versionId: string,
+    decision: any,
+    recoveryCtx: RecoveryEngineContext,
+  ): Promise<any> {
+    const rationale = `Carico non aumentato nonostante performance positive perché ${recoveryCtx.summary} — Decision originale: ${decision.reasoning}`;
+    return this.createAdjustment(userId, planId, planExercise.id, versionId, decision.id, {
+      type: 'PROGRESSION_HELD' as AdjustmentType,
+      field: 'recommendedWeightKg',
+      oldValue: { value: planExercise.recommendedWeightKg ?? decision.oldWeight ?? null },
+      newValue: { value: planExercise.recommendedWeightKg ?? decision.oldWeight ?? null },
+      rationale,
+    });
   }
 
   private async applyWeightChange(
@@ -268,7 +324,7 @@ export class ProgramAdjustmentService {
     versionId: string,
     decision: any,
   ): Promise<any[]> {
-    if (planExercise.deloadActive) return []; // already deloading
+    if (planExercise.deloadActive) return [];
 
     const newSets = Math.max(1, Math.ceil(planExercise.sets * DELOAD_SET_RATIO));
     const newRpe = Math.max(5, (planExercise.rpeTarget ?? 8) - DELOAD_RPE_REDUCTION);

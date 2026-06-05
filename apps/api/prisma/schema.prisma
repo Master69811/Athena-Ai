@@ -140,6 +140,27 @@ enum FatigueLevel {
   OVERTRAINED
 }
 
+enum RecoveryTrend {
+  IMPROVING
+  STABLE
+  DECLINING
+  INSUFFICIENT_DATA
+}
+
+enum OverreachingRisk {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum EngineAction {
+  PROCEED
+  CAUTION
+  HOLD
+  DELOAD
+}
+
 enum TrainerClientStatus {
   PENDING
   ACTIVE
@@ -193,6 +214,7 @@ enum AdjustmentType {
   DELOAD_END
   EXERCISE_SWAP
   RPE_ADJUST
+  PROGRESSION_HELD
 }
 
 model User {
@@ -228,6 +250,7 @@ model User {
   progressions        AIProgressionDecision[]
   programVersions     ProgramVersion[]
   programAdjustments  ProgramAdjustment[]
+  recoverySnapshots   RecoverySnapshot[]
   exercise1RMs        Exercise1RM[]
   createdExercises    Exercise[]      @relation("ExerciseCreator")
 
@@ -638,6 +661,27 @@ model RecoveryLog {
   @@unique([userId, date])
   @@index([userId])
   @@map("recovery_logs")
+}
+
+model RecoverySnapshot {
+  id                 String           @id @default(cuid())
+  userId             String
+  windowDays         Int
+  avgScore           Float
+  minScore           Float
+  maxScore           Float
+  logCount           Int
+  consecutiveLowDays Int
+  trendDirection     RecoveryTrend
+  overreachingRisk   OverreachingRisk
+  engineAction       EngineAction
+  computedAt         DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, computedAt])
+  @@index([userId, windowDays])
+  @@map("recovery_snapshots")
 }
 
 model AIConversation {

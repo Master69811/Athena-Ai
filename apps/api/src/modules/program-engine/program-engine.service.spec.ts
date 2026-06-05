@@ -61,6 +61,21 @@ const makePrisma = (overrides: Record<string, any> = {}) =>
     ...overrides,
   }) as any;
 
+const makeRecovery = (contextOverrides: Record<string, any> = {}) =>
+  ({
+    getRecoveryContextForEngine: jest.fn().mockResolvedValue({
+      hasEnoughData: false,
+      avgScore7d: 75,
+      minScore7d: 65,
+      consecutiveLowDays: 0,
+      trendDirection: 'STABLE',
+      overreachingRisk: 'NONE',
+      engineAction: 'PROCEED',
+      summary: 'Dati insufficienti per valutare il recupero.',
+      ...contextOverrides,
+    }),
+  }) as any;
+
 describe('ProgramAdjustmentService', () => {
   let service: ProgramAdjustmentService;
 
@@ -68,7 +83,7 @@ describe('ProgramAdjustmentService', () => {
 
   describe('createPlanSnapshot', () => {
     beforeEach(() => {
-      service = new ProgramAdjustmentService(makePrisma());
+      service = new ProgramAdjustmentService(makePrisma(), makeRecovery());
     });
 
     it('captures all exercise fields accurately', () => {
@@ -93,7 +108,7 @@ describe('ProgramAdjustmentService', () => {
 
   describe('applyPendingDecisions — no pending decisions', () => {
     it('returns applied=0 when no active plan', async () => {
-      service = new ProgramAdjustmentService(makePrisma());
+      service = new ProgramAdjustmentService(makePrisma(), makeRecovery());
       const result = await service.applyPendingDecisions('user-1');
       expect(result.applied).toBe(0);
       expect(result.versionId).toBeNull();
@@ -104,6 +119,7 @@ describe('ProgramAdjustmentService', () => {
         makePrisma({
           workoutPlan: { findFirst: jest.fn().mockResolvedValue(mockPlan) },
         }),
+        makeRecovery(),
       );
       const result = await service.applyPendingDecisions('user-1');
       expect(result.applied).toBe(0);
@@ -133,6 +149,7 @@ describe('ProgramAdjustmentService', () => {
             update: jest.fn().mockResolvedValue({}),
           },
         }),
+        makeRecovery(),
       );
     });
 
@@ -155,7 +172,7 @@ describe('ProgramAdjustmentService', () => {
           update: jest.fn().mockResolvedValue({}),
         },
       });
-      service = new ProgramAdjustmentService(prisma);
+      service = new ProgramAdjustmentService(prisma, makeRecovery());
       await service.applyPendingDecisions('user-1');
       expect(prisma.workoutExercise.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -181,7 +198,7 @@ describe('ProgramAdjustmentService', () => {
           update: jest.fn().mockResolvedValue({}),
         },
       });
-      service = new ProgramAdjustmentService(prisma);
+      service = new ProgramAdjustmentService(prisma, makeRecovery());
       const result = await service.applyPendingDecisions('user-1');
       expect(result.applied).toBe(1);
       expect(prisma.workoutExercise.update).toHaveBeenCalledWith(
@@ -206,7 +223,7 @@ describe('ProgramAdjustmentService', () => {
           update: jest.fn().mockResolvedValue({}),
         },
       });
-      service = new ProgramAdjustmentService(prisma);
+      service = new ProgramAdjustmentService(prisma, makeRecovery());
       const result = await service.applyPendingDecisions('user-1');
       expect(result.applied).toBe(2); // sets + rpeTarget adjustments
 
@@ -231,9 +248,99 @@ describe('ProgramAdjustmentService', () => {
           update: jest.fn().mockResolvedValue({}),
         },
       });
-      service = new ProgramAdjustmentService(prisma);
+      service = new ProgramAdjustmentService(prisma, makeRecovery());
       const result = await service.applyPendingDecisions('user-1');
       expect(result.applied).toBe(0);
+    });
+  });
+
+  // ─── Recovery-gated decisions ─────────────────────────────────────────────
+
+  describe('Recovery Engine gate', () => {
+    const increaseDecision = {
+      id: 'd-rec-1',
+      action: 'INCREASE_WEIGHT',
+      exerciseId: 'ex-1',
+      oldWeight: 95,
+      newWeight: 97.5,
+      reasoning: 'RPE medio 6.5 per 3 settimane.',
+      exercise: mockExercise,
+      isApplied: false,
+    };
+
+    it('creates PROGRESSION_HELD adjustment when engineAction=HOLD', async () => {
+      const prisma = makePrisma({
+        workoutPlan: { findFirst: jest.fn().mockResolvedValue(mockPlan) },
+        aIProgressionDecision: {
+          findMany: jest.fn().mockResolvedValue([increaseDecision]),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      });
+      service = new ProgramAdjustmentService(
+        prisma,
+        makeRecovery({
+          hasEnoughData: true,
+          engineAction: 'HOLD',
+          avgScore7d: 42,
+          summary: 'Recovery Score medio 42/100 negli ultimi 7 giorni (trend stabile). Progressione sospesa.',
+        }),
+      );
+      const result = await service.applyPendingDecisions('user-1');
+      expect(result.applied).toBe(1);
+      expect(prisma.workoutExercise.update).not.toHaveBeenCalled();
+      const createdAdj = prisma.programAdjustment.create.mock.calls[0][0].data;
+      expect(createdAdj.type).toBe('PROGRESSION_HELD');
+      expect(createdAdj.rationale).toContain('Recovery Score medio 42/100');
+      expect(createdAdj.rationale).toContain('Carico non aumentato');
+    });
+
+    it('triggers deload when engineAction=DELOAD and exercise not in deload', async () => {
+      const prisma = makePrisma({
+        workoutPlan: { findFirst: jest.fn().mockResolvedValue(mockPlan) },
+        aIProgressionDecision: {
+          findMany: jest.fn().mockResolvedValue([increaseDecision]),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      });
+      service = new ProgramAdjustmentService(
+        prisma,
+        makeRecovery({
+          hasEnoughData: true,
+          engineAction: 'DELOAD',
+          avgScore7d: 30,
+          summary: 'Recovery Score medio 30/100. Deload attivato.',
+        }),
+      );
+      const result = await service.applyPendingDecisions('user-1');
+      expect(result.applied).toBe(2); // SETS_DECREASE + DELOAD adjustments
+      const updateCall = prisma.workoutExercise.update.mock.calls[0][0].data;
+      expect(updateCall.deloadActive).toBe(true);
+    });
+
+    it('applies CAUTION weight increase with recovery context appended to rationale', async () => {
+      const prisma = makePrisma({
+        workoutPlan: { findFirst: jest.fn().mockResolvedValue(mockPlan) },
+        aIProgressionDecision: {
+          findMany: jest.fn().mockResolvedValue([increaseDecision]),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      });
+      service = new ProgramAdjustmentService(
+        prisma,
+        makeRecovery({
+          hasEnoughData: true,
+          engineAction: 'CAUTION',
+          avgScore7d: 58,
+          summary: 'Recovery Score medio 58/100 (trend stabile). Progressione applicata con cautela.',
+        }),
+      );
+      const result = await service.applyPendingDecisions('user-1');
+      expect(result.applied).toBe(1);
+      expect(prisma.workoutExercise.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { recommendedWeightKg: 97.5 } }),
+      );
+      const adjRationale = prisma.programAdjustment.create.mock.calls[0][0].data.rationale;
+      expect(adjRationale).toContain('Recovery Score medio 58/100');
     });
   });
 
@@ -257,7 +364,7 @@ describe('ProgramAdjustmentService', () => {
           update: jest.fn().mockResolvedValue({}),
         },
       });
-      service = new ProgramAdjustmentService(prisma);
+      service = new ProgramAdjustmentService(prisma, makeRecovery());
       const result = await service.processExpiredDeloads();
       expect(result.processed).toBe(1);
       expect(prisma.workoutExercise.update).toHaveBeenCalledWith(
@@ -268,7 +375,7 @@ describe('ProgramAdjustmentService', () => {
     });
 
     it('returns processed=0 when no expired deloads', async () => {
-      service = new ProgramAdjustmentService(makePrisma());
+      service = new ProgramAdjustmentService(makePrisma(), makeRecovery());
       const result = await service.processExpiredDeloads();
       expect(result.processed).toBe(0);
     });
@@ -278,7 +385,7 @@ describe('ProgramAdjustmentService', () => {
 
   describe('revertAdjustment', () => {
     it('throws NotFoundException for unknown adjustment', async () => {
-      service = new ProgramAdjustmentService(makePrisma());
+      service = new ProgramAdjustmentService(makePrisma(), makeRecovery());
       await expect(service.revertAdjustment('user-1', 'bad-id')).rejects.toThrow(NotFoundException);
     });
 
@@ -291,7 +398,7 @@ describe('ProgramAdjustmentService', () => {
           update: jest.fn(),
         },
       });
-      service = new ProgramAdjustmentService(prisma);
+      service = new ProgramAdjustmentService(prisma, makeRecovery());
       await expect(service.revertAdjustment('user-1', 'adj-1')).rejects.toThrow(ForbiddenException);
     });
 
@@ -304,7 +411,7 @@ describe('ProgramAdjustmentService', () => {
           update: jest.fn(),
         },
       });
-      service = new ProgramAdjustmentService(prisma);
+      service = new ProgramAdjustmentService(prisma, makeRecovery());
       await expect(service.revertAdjustment('user-1', 'adj-1')).rejects.toThrow(BadRequestException);
     });
 
@@ -318,7 +425,7 @@ describe('ProgramAdjustmentService', () => {
           update: jest.fn().mockResolvedValue({}),
         },
       });
-      service = new ProgramAdjustmentService(prisma);
+      service = new ProgramAdjustmentService(prisma, makeRecovery());
       const result = await service.revertAdjustment('user-1', 'adj-1');
       expect(result.reverted).toBe(true);
       expect(prisma.workoutExercise.update).toHaveBeenCalledWith(
@@ -331,7 +438,7 @@ describe('ProgramAdjustmentService', () => {
 
   describe('restoreVersion', () => {
     it('throws NotFoundException for unknown version', async () => {
-      service = new ProgramAdjustmentService(makePrisma());
+      service = new ProgramAdjustmentService(makePrisma(), makeRecovery());
       await expect(service.restoreVersion('user-1', 'v-bad')).rejects.toThrow(NotFoundException);
     });
 
@@ -344,7 +451,7 @@ describe('ProgramAdjustmentService', () => {
           }),
         },
       });
-      service = new ProgramAdjustmentService(prisma);
+      service = new ProgramAdjustmentService(prisma, makeRecovery());
       await expect(service.restoreVersion('user-1', 'v-1')).rejects.toThrow(ForbiddenException);
     });
 
@@ -369,7 +476,7 @@ describe('ProgramAdjustmentService', () => {
           updateMany: jest.fn().mockResolvedValue({ count: 2 }),
         },
       });
-      service = new ProgramAdjustmentService(prisma);
+      service = new ProgramAdjustmentService(prisma, makeRecovery());
       const result = await service.restoreVersion('user-1', 'v-1');
       expect(result.restored).toBe(1);
       expect(prisma.workoutExercise.update).toHaveBeenCalledTimes(1);

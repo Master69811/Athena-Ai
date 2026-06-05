@@ -95,6 +95,7 @@ export const recoveryApi = {
   log: (data: any) => api.post('/recovery/log', data),
   getLatest: () => api.get('/recovery/latest'),
   getHistory: (days?: number) => api.get('/recovery/history', { params: { days } }),
+  getSnapshot: () => api.get('/recovery/snapshot'),
 };
 
 // AI Coach
