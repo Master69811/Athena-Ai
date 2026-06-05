@@ -132,6 +132,14 @@ export const nutritionEngineApi = {
   getCompliance: () => api.get('/nutrition-engine/compliance'),
 };
 
+// Analytics
+export const analyticsApi = {
+  volumeByMuscle: (weeks?: number) => api.get('/analytics/volume/muscle-groups', { params: { weeks } }),
+  volumeTrend: (weeks?: number) => api.get('/analytics/volume/trend', { params: { weeks } }),
+  strength: (exerciseId: string) => api.get(`/analytics/strength/${exerciseId}`),
+  frequency: (weeks?: number) => api.get('/analytics/frequency', { params: { weeks } }),
+};
+
 // Gamification
 export const gamificationApi = {
   getAchievements: () => api.get('/gamification/achievements'),

@@ -7,7 +7,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { TrendingUp, Scale, Camera, PlusCircle } from 'lucide-react';
+import { TrendingUp, Scale, Camera, PlusCircle, BarChart3 } from 'lucide-react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 
 function ProgressSkeleton() {
@@ -79,12 +80,20 @@ export default function ProgressPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Header action */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Progressi</h1>
-        <Button variant="gradient" size="sm" className="gap-1.5" onClick={() => setModalOpen(true)}>
-          <PlusCircle className="w-4 h-4" />
-          Aggiungi misurazione
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link href="/progress/analytics">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <BarChart3 className="w-4 h-4" />
+              <span className="hidden sm:inline">Analytics</span>
+            </Button>
+          </Link>
+          <Button variant="gradient" size="sm" className="gap-1.5" onClick={() => setModalOpen(true)}>
+            <PlusCircle className="w-4 h-4" />
+            <span className="hidden sm:inline">Aggiungi</span> misurazione
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
