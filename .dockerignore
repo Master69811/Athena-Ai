@@ -1,0 +1,14 @@
+# Keep the build context small and force a clean install inside the image.
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+.git
+.github
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+**/.DS_Store
+docs
