@@ -233,7 +233,7 @@ export default function SessionPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setWeight(w => Math.max(0, Math.round((w - 2.5) * 10) / 10))}
-                className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors"
+                className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 active:scale-95 transition-all touch-manipulation"
               >
                 <Minus className="w-4 h-4" />
               </button>
@@ -242,7 +242,7 @@ export default function SessionPage() {
               </div>
               <button
                 onClick={() => setWeight(w => Math.round((w + 2.5) * 10) / 10)}
-                className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors"
+                className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 active:scale-95 transition-all touch-manipulation"
               >
                 <Plus className="w-4 h-4" />
               </button>
@@ -253,7 +253,7 @@ export default function SessionPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setReps(r => Math.max(1, r - 1))}
-                className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors"
+                className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 active:scale-95 transition-all touch-manipulation"
               >
                 <Minus className="w-4 h-4" />
               </button>
@@ -262,7 +262,7 @@ export default function SessionPage() {
               </div>
               <button
                 onClick={() => setReps(r => r + 1)}
-                className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors"
+                className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 active:scale-95 transition-all touch-manipulation"
               >
                 <Plus className="w-4 h-4" />
               </button>

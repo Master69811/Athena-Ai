@@ -26,7 +26,10 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [shaking, setShaking] = useState(false);
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
+
+  const shake = () => { setShaking(true); setTimeout(() => setShaking(false), 400); };
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
@@ -67,26 +70,26 @@ export default function LoginPage() {
         <div className="glass-card-elevated p-8">
           <h2 className="text-xl font-bold mb-6">Accedi</h2>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit, shake)} className={`space-y-4 ${shaking ? 'animate-shake' : ''}`}>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input {...register('email')} type="email" className="input-field pl-10" placeholder="tu@email.com" />
+                <Mail className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 ${errors.email ? 'text-destructive/70' : 'text-muted-foreground'}`} />
+                <input {...register('email')} type="email" className={`input-field pl-10 ${errors.email ? 'input-error' : ''}`} placeholder="tu@email.com" aria-invalid={!!errors.email} aria-describedby={errors.email ? 'email-error' : undefined} />
               </div>
-              {errors.email && <p className="text-xs text-destructive mt-1">{errors.email.message}</p>}
+              {errors.email && <p id="email-error" role="alert" className="text-xs text-destructive mt-1 flex items-center gap-1">{errors.email.message}</p>}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input {...register('password')} type={showPassword ? 'text' : 'password'} className="input-field pl-10 pr-10" placeholder="••••••••" />
-                <button type="button" onClick={() => setShowPassword(s => !s)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <Lock className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 ${errors.password ? 'text-destructive/70' : 'text-muted-foreground'}`} />
+                <input {...register('password')} type={showPassword ? 'text' : 'password'} className={`input-field pl-10 pr-10 ${errors.password ? 'input-error' : ''}`} placeholder="••••••••" aria-invalid={!!errors.password} aria-describedby={errors.password ? 'password-error' : undefined} />
+                <button type="button" onClick={() => setShowPassword(s => !s)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}>
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              {errors.password && <p className="text-xs text-destructive mt-1">{errors.password.message}</p>}
+              {errors.password && <p id="password-error" role="alert" className="text-xs text-destructive mt-1">{errors.password.message}</p>}
             </div>
 
             <Button type="submit" variant="gradient" size="lg" className="w-full mt-2" loading={loading}>

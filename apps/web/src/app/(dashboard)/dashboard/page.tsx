@@ -50,10 +50,29 @@ const stagger = {
   animate: { transition: { staggerChildren: 0.08 } },
 };
 
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto animate-pulse">
+      <div className="h-20 rounded-2xl bg-muted" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-2xl bg-muted" />)}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 h-64 rounded-2xl bg-muted" />
+        <div className="h-64 rounded-2xl bg-muted" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="h-40 rounded-2xl bg-muted" />
+        <div className="h-40 rounded-2xl bg-muted" />
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuthStore();
 
-  const { data: dashboard } = useQuery({
+  const { data: dashboard, isLoading: dashboardLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: usersApi.getDashboard,
     select: (res: any) => res.data,
@@ -135,20 +154,24 @@ export default function DashboardPage() {
       ]
     : [];
 
+  if (dashboardLoading) return <DashboardSkeleton />;
+
   return (
     <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-6 max-w-7xl mx-auto">
-      
-      {/* Welcome + AI Insight */}
+
+      {/* AI Insight — elevated hierarchy */}
       <motion.div variants={fadeInUp}>
-        <Card glow className="bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary/30">
-              <Brain className="w-5 h-5 text-white" />
+        <Card glow className="relative overflow-hidden bg-gradient-to-r from-primary/8 to-accent/8 border-primary/30 shadow-lg shadow-primary/10">
+          {/* Animated gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-accent/5 to-primary/5 animate-gradient-x pointer-events-none rounded-2xl" />
+          <div className="flex items-start gap-4 relative">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0 shadow-xl shadow-primary/40">
+              <Brain className="w-5 h-5 text-white animate-pulse" style={{ animationDuration: '2.5s' }} />
             </div>
             <div className="flex-1">
-              <p className="text-xs text-primary font-medium mb-1">ATHENA AI — INSIGHT DEL GIORNO</p>
+              <p className="text-xs text-primary font-semibold tracking-wide mb-1.5">ATHENA AI · INSIGHT DEL GIORNO</p>
               <p className="text-sm text-foreground leading-relaxed">
-                {dashboard?.aiInsightOfTheDay || 'Caricamento insight personalizzato...'}
+                {dashboard?.aiInsightOfTheDay || 'Caricamento insight personalizzato…'}
               </p>
             </div>
           </div>
