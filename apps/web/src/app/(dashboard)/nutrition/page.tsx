@@ -1,12 +1,21 @@
 'use client';
 
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { nutritionApi } from '@/lib/api';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Brain, Apple, Utensils, PlusCircle } from 'lucide-react';
+import { Modal } from '@/components/ui/modal';
+import { Brain, Apple, Utensils, PlusCircle, Search, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
+
+const MEAL_TYPES = [
+  { value: 'BREAKFAST', label: 'Colazione' },
+  { value: 'LUNCH', label: 'Pranzo' },
+  { value: 'DINNER', label: 'Cena' },
+  { value: 'SNACK', label: 'Spuntino' },
+];
 
 function NutritionSkeleton() {
   return (
@@ -18,7 +27,20 @@ function NutritionSkeleton() {
 }
 
 export default function NutritionPage() {
+  const queryClient = useQueryClient();
   const today = new Date().toISOString().split('T')[0];
+
+  const [mealModalOpen, setMealModalOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [selectedFood, setSelectedFood] = useState<any>(null);
+  const [mealType, setMealType] = useState('BREAKFAST');
+  const [servings, setServings] = useState('1');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const { data: plan, isLoading: planLoading } = useQuery({
     queryKey: ['nutrition-plan'],
@@ -32,10 +54,58 @@ export default function NutritionPage() {
     select: (res: any) => res.data,
   });
 
+  const { data: foodResults, isFetching: searching } = useQuery({
+    queryKey: ['food-search', debounced],
+    queryFn: () => nutritionApi.searchFood(debounced),
+    select: (res: any) => res.data as any[],
+    enabled: mealModalOpen && debounced.length >= 2,
+  });
+
   const generateMutation = useMutation({
     mutationFn: nutritionApi.generatePlan,
-    onSuccess: () => toast.success('Piano nutrizionale generato da Athena!'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nutrition-plan'] });
+      toast.success('Piano nutrizionale generato da Athena!');
+    },
   });
+
+  const logMutation = useMutation({
+    mutationFn: (data: any) => nutritionApi.logMeal(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nutrition-daily', today] });
+      toast.success('Pasto registrato!');
+      closeMealModal();
+    },
+    onError: (e: any) => toast.error(e?.message || 'Errore nel salvataggio del pasto'),
+  });
+
+  const closeMealModal = () => {
+    setMealModalOpen(false);
+    setSearch('');
+    setDebounced('');
+    setSelectedFood(null);
+    setServings('1');
+    setMealType('BREAKFAST');
+  };
+
+  const submitMeal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFood) {
+      toast.error('Seleziona un alimento');
+      return;
+    }
+    const s = parseFloat(servings);
+    if (!s || s <= 0) {
+      toast.error('Inserisci un numero di porzioni valido');
+      return;
+    }
+    logMutation.mutate({
+      date: today,
+      mealType,
+      foodItemId: selectedFood.id,
+      servings: s,
+    });
+  };
 
   if (planLoading) return <NutritionSkeleton />;
 
@@ -89,7 +159,15 @@ export default function NutritionPage() {
           {/* Log giornaliero */}
           {macros ? (
             <Card>
-              <CardHeader><CardTitle>Oggi — {today}</CardTitle></CardHeader>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Oggi — {today}</CardTitle>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setMealModalOpen(true)}>
+                    <PlusCircle className="w-4 h-4" />
+                    Aggiungi pasto
+                  </Button>
+                </div>
+              </CardHeader>
               <div className="space-y-4">
                 {[
                   { label: 'Calorie',     consumed: macros.calories.consumed, target: macros.calories.target, unit: 'kcal', color: '#6366f1' },
@@ -128,7 +206,7 @@ export default function NutritionPage() {
                 <p className="text-sm text-muted-foreground max-w-xs">
                   Inizia a tracciare i tuoi pasti per vedere il progresso verso i tuoi obiettivi.
                 </p>
-                <Button variant="outline" size="sm" className="mt-1 gap-2">
+                <Button variant="outline" size="sm" className="mt-1 gap-2" onClick={() => setMealModalOpen(true)}>
                   <PlusCircle className="w-4 h-4" />
                   Aggiungi pasto
                 </Button>
@@ -142,6 +220,116 @@ export default function NutritionPage() {
           </Button>
         </>
       )}
+
+      {/* Meal log modal */}
+      <Modal
+        open={mealModalOpen}
+        onClose={closeMealModal}
+        title="Aggiungi pasto"
+        description="Cerca un alimento e registralo nel diario di oggi."
+      >
+        <form onSubmit={submitMeal} className="space-y-4">
+          {/* Meal type */}
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Tipo pasto</label>
+            <div className="grid grid-cols-4 gap-2">
+              {MEAL_TYPES.map(t => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setMealType(t.value)}
+                  className={`py-2 px-1 rounded-xl text-xs font-medium transition-colors touch-manipulation ${
+                    mealType === t.value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Food search */}
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Alimento</label>
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setSelectedFood(null); }}
+                placeholder="Cerca alimento (min. 2 lettere)…"
+                className="input-field w-full pl-10"
+                autoFocus
+              />
+            </div>
+
+            {/* Results */}
+            {debounced.length >= 2 && !selectedFood && (
+              <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-border divide-y divide-border">
+                {searching ? (
+                  <p className="text-sm text-muted-foreground p-3 text-center">Ricerca…</p>
+                ) : foodResults && foodResults.length > 0 ? (
+                  foodResults.map((f: any) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setSelectedFood(f)}
+                      className="w-full text-left p-3 hover:bg-muted transition-colors flex items-center justify-between"
+                    >
+                      <span className="text-sm font-medium">
+                        {f.name}{f.brand ? <span className="text-muted-foreground"> · {f.brand}</span> : null}
+                      </span>
+                      <span className="text-xs text-muted-foreground tabular-nums">{Math.round(f.calories)} kcal</span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground p-3 text-center">Nessun alimento trovato</p>
+                )}
+              </div>
+            )}
+
+            {/* Selected food */}
+            {selectedFood && (
+              <div className="mt-2 p-3 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold flex items-center gap-1.5">
+                    <Check className="w-4 h-4 text-primary" /> {selectedFood.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {Math.round(selectedFood.calories)} kcal · P {Math.round(selectedFood.proteinG)}g · C {Math.round(selectedFood.carbsG)}g · G {Math.round(selectedFood.fatG)}g
+                    {' '}/ {selectedFood.servingSize}{selectedFood.servingUnit}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setSelectedFood(null)} className="text-xs text-primary hover:underline">
+                  Cambia
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Servings */}
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Porzioni</label>
+            <input
+              type="number"
+              step="0.25"
+              min="0.25"
+              inputMode="decimal"
+              value={servings}
+              onChange={(e) => setServings(e.target.value)}
+              className="input-field w-full"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={closeMealModal}>
+              Annulla
+            </Button>
+            <Button type="submit" variant="gradient" className="flex-1" loading={logMutation.isPending} disabled={!selectedFood}>
+              Registra
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

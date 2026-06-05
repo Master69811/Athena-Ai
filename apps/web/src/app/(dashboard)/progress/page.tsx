@@ -1,12 +1,14 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usersApi } from '@/lib/api';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Modal } from '@/components/ui/modal';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { TrendingUp, Scale, Camera, PlusCircle } from 'lucide-react';
-import Link from 'next/link';
+import { toast } from 'sonner';
 
 function ProgressSkeleton() {
   return (
@@ -21,11 +23,48 @@ function ProgressSkeleton() {
 }
 
 export default function ProgressPage() {
+  const queryClient = useQueryClient();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [weightKg, setWeightKg] = useState('');
+  const [bodyFatPct, setBodyFatPct] = useState('');
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+
   const { data: measurements, isLoading } = useQuery({
     queryKey: ['measurements'],
     queryFn: () => usersApi.getMeasurements(),
     select: (res: any) => res.data as any[],
   });
+
+  const addMutation = useMutation({
+    mutationFn: (data: any) => usersApi.addMeasurement(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['measurements'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      toast.success('Misurazione salvata!');
+      closeModal();
+    },
+    onError: (e: any) => toast.error(e?.message || 'Errore nel salvataggio'),
+  });
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setWeightKg('');
+    setBodyFatPct('');
+    setDate(new Date().toISOString().split('T')[0]);
+  };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const w = parseFloat(weightKg);
+    if (!w || w < 20 || w > 400) {
+      toast.error('Inserisci un peso valido (20–400 kg)');
+      return;
+    }
+    const payload: any = { date, weightKg: w };
+    const bf = parseFloat(bodyFatPct);
+    if (bf && bf > 0 && bf < 70) payload.bodyFatPct = bf;
+    addMutation.mutate(payload);
+  };
 
   if (isLoading) return <ProgressSkeleton />;
 
@@ -39,6 +78,15 @@ export default function ProgressPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header action */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Progressi</h1>
+        <Button variant="gradient" size="sm" className="gap-1.5" onClick={() => setModalOpen(true)}>
+          <PlusCircle className="w-4 h-4" />
+          Aggiungi misurazione
+        </Button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         {/* Weight chart */}
@@ -75,12 +123,10 @@ export default function ProgressPage() {
             <div className="flex flex-col items-center justify-center h-52 gap-3 text-center">
               <Scale className="w-10 h-10 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">Nessun dato peso ancora</p>
-              <Link href="/dashboard">
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  Registra peso
-                </Button>
-              </Link>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setModalOpen(true)}>
+                <PlusCircle className="w-3.5 h-3.5" />
+                Registra peso
+              </Button>
             </div>
           )}
         </Card>
@@ -118,7 +164,7 @@ export default function ProgressPage() {
               <p className="text-xs text-muted-foreground max-w-[200px]">
                 Aggiungi la tua prima misurazione per iniziare a tracciare i progressi.
               </p>
-              <Button variant="outline" size="sm" className="gap-1.5">
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setModalOpen(true)}>
                 <PlusCircle className="w-3.5 h-3.5" />
                 Aggiungi misurazione
               </Button>
@@ -127,7 +173,7 @@ export default function ProgressPage() {
         </Card>
       </div>
 
-      {/* Photo comparison — responsive grid */}
+      {/* Photo comparison */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -142,6 +188,7 @@ export default function ProgressPage() {
               className="aspect-[3/4] bg-muted rounded-xl flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border hover:border-primary/50 transition-colors cursor-pointer group"
               role="button"
               aria-label={`Aggiungi foto ${type}`}
+              onClick={() => toast('Caricamento foto in arrivo', { description: 'Questa funzione sarà disponibile a breve.' })}
             >
               <Camera className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
               <p className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">{type}</p>
@@ -149,6 +196,60 @@ export default function ProgressPage() {
           ))}
         </div>
       </Card>
+
+      {/* Add measurement modal */}
+      <Modal
+        open={modalOpen}
+        onClose={closeModal}
+        title="Aggiungi misurazione"
+        description="Registra peso e percentuale di grasso corporeo."
+      >
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Data</label>
+            <input
+              type="date"
+              value={date}
+              max={new Date().toISOString().split('T')[0]}
+              onChange={(e) => setDate(e.target.value)}
+              className="input-field w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Peso (kg) *</label>
+            <input
+              type="number"
+              step="0.1"
+              inputMode="decimal"
+              value={weightKg}
+              onChange={(e) => setWeightKg(e.target.value)}
+              placeholder="es. 75.4"
+              className="input-field w-full"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Grasso corporeo (%) — opzionale</label>
+            <input
+              type="number"
+              step="0.1"
+              inputMode="decimal"
+              value={bodyFatPct}
+              onChange={(e) => setBodyFatPct(e.target.value)}
+              placeholder="es. 15.2"
+              className="input-field w-full"
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={closeModal}>
+              Annulla
+            </Button>
+            <Button type="submit" variant="gradient" className="flex-1" loading={addMutation.isPending}>
+              Salva
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
