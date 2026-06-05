@@ -113,6 +113,25 @@ export const exercisesApi = {
   getHistory: (id: string) => api.get(`/exercises/${id}/history`),
 };
 
+// Body Weight Engine
+export const bodyWeightApi = {
+  log: (data: { date: string; weightKg: number; notes?: string }) => api.post('/body-weight/log', data),
+  getHistory: (days?: number) => api.get('/body-weight/history', { params: { days } }),
+  getSnapshot: () => api.get('/body-weight/snapshot'),
+};
+
+// Nutrition Engine
+export const nutritionEngineApi = {
+  getDecisions: (params?: { limit?: number; unreadOnly?: boolean }) =>
+    api.get('/nutrition-engine/decisions', { params }),
+  getUnreadCount: () => api.get('/nutrition-engine/decisions/unread-count'),
+  applyDecision: (id: string) => api.put(`/nutrition-engine/decisions/${id}/apply`),
+  markRead: (id: string) => api.put(`/nutrition-engine/decisions/${id}/read`),
+  markAllRead: () => api.put('/nutrition-engine/decisions/read-all'),
+  run: () => api.post('/nutrition-engine/run'),
+  getCompliance: () => api.get('/nutrition-engine/compliance'),
+};
+
 // Progression
 export const progressionApi = {
   getHistory: (limit?: number) => api.get('/progression/history', { params: { limit } }),

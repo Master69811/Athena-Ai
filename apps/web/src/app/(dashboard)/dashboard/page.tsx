@@ -2,17 +2,29 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { usersApi, workoutApi, recoveryApi, nutritionApi, progressionApi } from '@/lib/api';
+import { usersApi, workoutApi, recoveryApi, nutritionApi, progressionApi, bodyWeightApi, nutritionEngineApi } from '@/lib/api';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip,
 } from 'recharts';
-import { Flame, Dumbbell, TrendingUp, Zap, ChevronRight, Brain, Activity } from 'lucide-react';
+import { Flame, Dumbbell, TrendingUp, Zap, ChevronRight, Brain, Activity, Scale, Utensils, CheckCircle, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { getRecoveryColor, getRecoveryLabel, formatWeight } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { InsightCard, type ProgressionInsight } from '@/components/progression/insight-card';
+
+const NUTRITION_DECISION_STYLES: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
+  CALORIE_DECREASE: { bg: 'bg-blue-500/10 border-blue-500/20', text: 'text-blue-400', icon: <TrendingUp className="w-4 h-4 rotate-180" /> },
+  CALORIE_INCREASE: { bg: 'bg-green-500/10 border-green-500/20', text: 'text-green-400', icon: <TrendingUp className="w-4 h-4" /> },
+  MAINTAIN: { bg: 'bg-yellow-500/10 border-yellow-500/20', text: 'text-yellow-400', icon: <AlertTriangle className="w-4 h-4" /> },
+};
+
+const NUTRITION_DECISION_LABELS: Record<string, string> = {
+  CALORIE_DECREASE: 'Riduzione calorica',
+  CALORIE_INCREASE: 'Aumento calorico',
+  MAINTAIN: 'Mantenimento',
+};
 
 const ENGINE_ACTION_STYLES: Record<string, string> = {
   PROCEED: 'bg-green-500/10 text-green-400 border-green-500/20',
@@ -90,6 +102,24 @@ export default function DashboardPage() {
       return res.data as { engineAction: string; avgScore: number; trendDirection: string } | null;
     },
     staleTime: 5 * 60_000,
+  });
+
+  const { data: weightSnapshot } = useQuery({
+    queryKey: ['weight-snapshot'],
+    queryFn: async () => {
+      const res = await bodyWeightApi.getSnapshot() as any;
+      return res.data as { ma7d: number; ma14d: number; weeklyRateKg: number; pred4wKg: number; trendDirection: string } | null;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: nutritionDecisions } = useQuery({
+    queryKey: ['nutrition-decisions-dashboard'],
+    queryFn: async () => {
+      const res = await nutritionEngineApi.getDecisions({ limit: 1, unreadOnly: true }) as any;
+      return res.data as Array<{ id: string; type: string; deltaCalories: number; rationale: string; createdAt: string }>;
+    },
+    staleTime: 60_000,
   });
 
   const unreadCount = unreadCountData?.count ?? 0;
@@ -186,13 +216,91 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
+      {/* Body Weight Engine + Nutrition Decision row */}
+      {(weightSnapshot || (nutritionDecisions && nutritionDecisions.length > 0)) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* Weight Trend Widget */}
+          {weightSnapshot && (
+            <motion.div variants={fadeInUp}>
+              <Card className="border-primary/20">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Scale className="w-5 h-5 text-primary" />
+                    <CardTitle>Trend Peso</CardTitle>
+                  </div>
+                </CardHeader>
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Media 7g</p>
+                    <p className="text-lg font-bold text-foreground">{weightSnapshot.ma7d.toFixed(1)}kg</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Media 14g</p>
+                    <p className="text-lg font-bold text-foreground">{weightSnapshot.ma14d.toFixed(1)}kg</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Tasso/sett</p>
+                    <p className={`text-lg font-bold ${weightSnapshot.weeklyRateKg < 0 ? 'text-green-400' : weightSnapshot.weeklyRateKg > 0 ? 'text-orange-400' : 'text-foreground'}`}>
+                      {weightSnapshot.weeklyRateKg > 0 ? '+' : ''}{weightSnapshot.weeklyRateKg.toFixed(2)}kg
+                    </p>
+                  </div>
+                </div>
+                {weightSnapshot.pred4wKg && (
+                  <p className="text-xs text-muted-foreground">
+                    Previsione 4 settimane: <span className="font-medium text-foreground">{weightSnapshot.pred4wKg.toFixed(1)}kg</span>
+                    {weightSnapshot.pred12wKg && <> · 12 settimane: <span className="font-medium text-foreground">{(weightSnapshot as any).pred12wKg?.toFixed(1)}kg</span></>}
+                  </p>
+                )}
+              </Card>
+            </motion.div>
+          )}
+
+          {/* Nutrition Decision Widget */}
+          {nutritionDecisions && nutritionDecisions.length > 0 && (() => {
+            const dec = nutritionDecisions[0];
+            const style = NUTRITION_DECISION_STYLES[dec.type] ?? NUTRITION_DECISION_STYLES.MAINTAIN;
+            return (
+              <motion.div variants={fadeInUp}>
+                <Card className={`border ${style.bg}`}>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Utensils className={`w-5 h-5 ${style.text}`} />
+                      <CardTitle>Decisione Nutrizionale</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <div className={`flex items-center gap-2 mb-2 text-sm font-semibold ${style.text}`}>
+                    {style.icon}
+                    <span>{NUTRITION_DECISION_LABELS[dec.type]}: {dec.deltaCalories > 0 ? '+' : ''}{dec.deltaCalories} kcal</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{dec.rationale}</p>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-xs text-muted-foreground">{new Date(dec.createdAt).toLocaleDateString('it-IT')}</span>
+                    <Link href="/nutrition" className="text-xs text-primary hover:underline flex items-center gap-1">
+                      Applica <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                </Card>
+              </motion.div>
+            );
+          })()}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* Weight Trend Chart */}
         <motion.div variants={fadeInUp} className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Andamento Peso</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle>Andamento Peso</CardTitle>
+                {weightSnapshot && (
+                  <span className={`text-xs font-semibold ${weightSnapshot.weeklyRateKg < 0 ? 'text-green-400' : 'text-orange-400'}`}>
+                    {weightSnapshot.weeklyRateKg > 0 ? '+' : ''}{weightSnapshot.weeklyRateKg.toFixed(2)}kg/sett
+                  </span>
+                )}
+              </div>
             </CardHeader>
             <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">

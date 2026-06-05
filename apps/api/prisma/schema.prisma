@@ -161,6 +161,21 @@ enum EngineAction {
   DELOAD
 }
 
+enum WeightTrend {
+  LOSING_FAST
+  LOSING_ON_TRACK
+  STABLE
+  GAINING_ON_TRACK
+  GAINING_FAST
+  INSUFFICIENT_DATA
+}
+
+enum NutritionDecisionType {
+  CALORIE_DECREASE
+  CALORIE_INCREASE
+  MAINTAIN
+}
+
 enum TrainerClientStatus {
   PENDING
   ACTIVE
@@ -251,6 +266,9 @@ model User {
   programVersions     ProgramVersion[]
   programAdjustments  ProgramAdjustment[]
   recoverySnapshots   RecoverySnapshot[]
+  bodyWeightEntries   BodyWeightEntry[]
+  bodyWeightSnapshots BodyWeightSnapshot[]
+  nutritionDecisions  NutritionDecision[]
   exercise1RMs        Exercise1RM[]
   createdExercises    Exercise[]      @relation("ExerciseCreator")
 
@@ -575,8 +593,9 @@ model NutritionPlan {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  weeklyChecks WeeklyNutritionCheck[]
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weeklyChecks      WeeklyNutritionCheck[]
+  nutritionDecisions NutritionDecision[]
 
   @@index([userId])
   @@map("nutrition_plans")
@@ -638,6 +657,61 @@ model WeeklyNutritionCheck {
 
   @@index([userId])
   @@map("weekly_nutrition_checks")
+}
+
+model BodyWeightEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime
+  weightKg  Float
+  notes     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("body_weight_entries")
+}
+
+model BodyWeightSnapshot {
+  id             String      @id @default(cuid())
+  userId         String
+  ma7d           Float
+  ma14d          Float
+  weeklyRateKg   Float
+  trendDirection WeightTrend
+  logCount       Int
+  pred4wKg       Float?
+  pred12wKg      Float?
+  confidenceScore Float?
+  computedAt     DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, computedAt])
+  @@map("body_weight_snapshots")
+}
+
+model NutritionDecision {
+  id           String                @id @default(cuid())
+  userId       String
+  planId       String?
+  type         NutritionDecisionType
+  deltaCalories Float
+  rationale    String
+  evidenceData Json
+  isApplied    Boolean               @default(false)
+  appliedAt    DateTime?
+  isRead       Boolean               @default(false)
+  createdAt    DateTime              @default(now())
+
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan NutritionPlan? @relation(fields: [planId], references: [id])
+
+  @@index([userId, isApplied])
+  @@index([userId, createdAt])
+  @@map("nutrition_decisions")
 }
 
 model RecoveryLog {

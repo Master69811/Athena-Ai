@@ -18,6 +18,8 @@ import { TrainerModule } from './modules/trainer/trainer.module';
 import { ProgressionModule } from './modules/progression/progression.module';
 import { ProgramEngineModule } from './modules/program-engine/program-engine.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { BodyWeightEngineModule } from './modules/body-weight-engine/body-weight-engine.module';
+import { NutritionEngineModule } from './modules/nutrition-engine/nutrition-engine.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { HealthModule } from './modules/health/health.module';
 
@@ -44,6 +46,8 @@ import { HealthModule } from './modules/health/health.module';
     ProgressionModule,
     ProgramEngineModule,
     AnalyticsModule,
+    BodyWeightEngineModule,
+    NutritionEngineModule,
   ],
 })
 export class AppModule {}
