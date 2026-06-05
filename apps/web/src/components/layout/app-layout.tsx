@@ -1,10 +1,28 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/store/auth.store';
 import { Sidebar } from './sidebar';
 import { MobileNav } from './mobile-nav';
 import { Topbar } from './topbar';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const { isAuthenticated, user } = useAuthStore();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.replace('/login');
+      return;
+    }
+    if (user && user.profile && !user.profile.onboardingCompleted) {
+      router.replace('/onboarding');
+    }
+  }, [isAuthenticated, user, router]);
+
+  if (!isAuthenticated) return null;
+
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />

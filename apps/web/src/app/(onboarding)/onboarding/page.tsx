@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { usersApi } from '@/lib/api';
+import { usersApi, workoutApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -45,6 +45,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
   const [data, setData] = useState({
     name: '', age: 25, gender: 'MALE', heightCm: 175, weightKg: 75, bodyFatPercentage: undefined as number | undefined,
     goalType: '', experienceLevel: '', methodology: '',
@@ -56,14 +57,24 @@ export default function OnboardingPage() {
 
   const handleSubmit = async () => {
     setLoading(true);
+    let onboardingDone = false;
     try {
       await usersApi.completeOnboarding(data);
-      toast.success('Profilo creato! Athena sta preparando il tuo piano...');
-      router.push('/dashboard');
+      onboardingDone = true;
+      setGeneratingPlan(true);
+      await workoutApi.generateAI();
+      toast.success('Piano generato! Benvenuto in Athena.');
+      router.push('/workout');
     } catch {
-      toast.error('Errore. Riprova.');
+      if (onboardingDone) {
+        toast('Profilo creato. Puoi generare il piano dalla sezione Allenamento.', { icon: '⚡' });
+        router.push('/workout');
+      } else {
+        toast.error('Errore durante la creazione del profilo. Riprova.');
+      }
     } finally {
       setLoading(false);
+      setGeneratingPlan(false);
     }
   };
 
@@ -258,6 +269,32 @@ export default function OnboardingPage() {
     () => !!data.methodology,
     () => true,
   ][step]();
+
+  if (generatingPlan) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="absolute inset-0 bg-gradient-radial from-primary/5 via-transparent to-transparent" />
+        <div className="text-center relative">
+          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-primary/40 animate-pulse">
+            <Brain className="w-12 h-12 text-white" />
+          </div>
+          <h2 className="text-3xl font-bold mb-4">Athena sta lavorando...</h2>
+          <p className="text-muted-foreground max-w-sm mx-auto mb-10 text-lg">
+            Sto analizzando il tuo profilo e costruendo il programma personalizzato al 100%. Ci vorrà qualche secondo.
+          </p>
+          <div className="flex justify-center gap-2">
+            {[0, 1, 2].map(i => (
+              <div
+                key={i}
+                className="w-3 h-3 rounded-full bg-primary"
+                style={{ animation: `bounce 1.2s ${i * 0.2}s infinite` }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
