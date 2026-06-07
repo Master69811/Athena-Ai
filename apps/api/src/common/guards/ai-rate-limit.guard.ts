@@ -1,4 +1,5 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../../modules/prisma/prisma.service';
 
@@ -13,9 +14,16 @@ const FREE_LIMITS: Record<AiType, number> = {
 
 @Injectable()
 export class AiRateLimitGuard implements CanActivate {
-  constructor(private prisma: PrismaService, private reflector: Reflector) {}
+  constructor(
+    private prisma: PrismaService,
+    private reflector: Reflector,
+    private configService: ConfigService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const disabled = this.configService?.get('DISABLE_AI_RATE_LIMIT') === 'true';
+    if (disabled) return true;
+
     const type = this.reflector.get<AiType>(AI_TYPE_KEY, context.getHandler());
     if (!type) return true;
 
@@ -36,7 +44,7 @@ export class AiRateLimitGuard implements CanActivate {
       });
       if (count >= limit) {
         throw new ForbiddenException(
-          `Piano Free: limite di ${limit} generazioni AI/mese raggiunto. Passa a PRO per generazioni illimitate.`,
+          'Piano Free: limite di ' + limit + ' generazioni AI/mese raggiunto.',
         );
       }
     } else if (type === 'chat') {
@@ -45,7 +53,7 @@ export class AiRateLimitGuard implements CanActivate {
       });
       if (count >= limit) {
         throw new ForbiddenException(
-          `Piano Free: limite di ${limit} messaggi AI/mese raggiunto. Passa a PRO per messaggi illimitati.`,
+          'Piano Free: limite di ' + limit + ' messaggi AI/mese raggiunto.',
         );
       }
     }

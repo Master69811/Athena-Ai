@@ -1,15 +1,25 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import { PrismaService } from '../prisma/prisma.service';
 import { TrainingMethodology, GoalType, ExperienceLevel } from '@prisma/client';
 
 @Injectable()
 export class AiWorkoutService {
-  private anthropic: Anthropic;
+  private genAI: GoogleGenerativeAI;
 
   constructor(private prisma: PrismaService, private configService: ConfigService) {
-    this.anthropic = new Anthropic({ apiKey: this.configService.get('ANTHROPIC_API_KEY') });
+    this.genAI = new GoogleGenerativeAI(this.configService.get('GEMINI_API_KEY', ''));
+  }
+
+  private getModel() {
+    return this.genAI.getGenerativeModel({
+      model: this.configService.get('GEMINI_MODEL', 'gemini-2.0-flash'),
+      safetySettings: [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+      ],
+    });
   }
 
   async generateWorkoutPlan(userId: string) {
@@ -21,7 +31,7 @@ export class AiWorkoutService {
       take: 100,
     });
 
-    const systemPrompt = `You are Athena, the world's best AI personal trainer and strength coach. You combine the knowledge of the top coaches including Renaissance Periodization, Project Invictus, Jim Wendler, and elite sports science researchers. 
+    const systemInstruction = `You are Athena, the world's best AI personal trainer and strength coach. You combine the knowledge of the top coaches including Renaissance Periodization, Project Invictus, Jim Wendler, and elite sports science researchers.
 
 You generate COMPLETE, DETAILED, PERSONALIZED workout programs that are:
 - Scientifically evidence-based
@@ -32,7 +42,7 @@ You generate COMPLETE, DETAILED, PERSONALIZED workout programs that are:
 
 Always respond with VALID JSON only, no markdown, no explanations outside the JSON.`;
 
-    const userMessage = `Generate a complete ${profile.trainingDaysPerWeek}-day workout program for this athlete:
+    const userPrompt = `Generate a complete ${profile.trainingDaysPerWeek}-day workout program for this athlete:
 
 PROFILE:
 - Name: ${profile.name}
@@ -85,19 +95,18 @@ Generate a complete ${profile.trainingDaysPerWeek}-day program. Return ONLY this
   ]
 }`;
 
-    const response = await this.anthropic.messages.create({
-      model: this.configService.get('ANTHROPIC_MODEL', 'claude-opus-4-8'),
-      max_tokens: 8000,
-      messages: [{ role: 'user', content: userMessage }],
-      system: systemPrompt,
+    const model = this.getModel();
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      systemInstruction,
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.7 },
     });
 
-    const content = response.content[0];
-    if (content.type !== 'text') throw new Error('Invalid AI response');
+    const content = result.response.text();
 
     let planData: any;
     try {
-      const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('No JSON found in response');
       planData = JSON.parse(jsonMatch[0]);
     } catch (e) {
@@ -178,22 +187,21 @@ Generate a complete ${profile.trainingDaysPerWeek}-day program. Return ONLY this
 
     const lastSet = previousSets[previousSets.length - 1];
     const rpeDiff = lastSet.rpe - targetRpe;
-    const repDiff = lastSet.reps - targetRepsMin;
 
     let weightAdjustment = 0;
     let recommendation = '';
 
     if (rpeDiff >= 2) {
       weightAdjustment = -2.5;
-      recommendation = `Last set was RPE ${lastSet.rpe} (target: ${targetRpe}). Reduce weight by 2.5kg to stay in the right intensity zone.`;
+      recommendation = `Ultima serie a RPE ${lastSet.rpe} (target: ${targetRpe}). Riduci il carico di 2.5kg per restare nella zona giusta.`;
     } else if (rpeDiff <= -1 && lastSet.reps >= targetRepsMax) {
       weightAdjustment = 2.5;
-      recommendation = `Excellent! You hit RPE ${lastSet.rpe} with ${lastSet.reps} reps. Increase weight by 2.5kg for the next set.`;
+      recommendation = `Ottimo! RPE ${lastSet.rpe} con ${lastSet.reps} rip. Aumenta il carico di 2.5kg.`;
     } else if (lastSet.reps < targetRepsMin) {
       weightAdjustment = -2.5;
-      recommendation = `You hit ${lastSet.reps} reps (target: ${targetRepsMin}-${targetRepsMax}). Reduce weight slightly to stay in range.`;
+      recommendation = `Hai fatto ${lastSet.reps} rip (target: ${targetRepsMin}-${targetRepsMax}). Riduci il carico leggermente.`;
     } else {
-      recommendation = `Looking good at RPE ${lastSet.rpe} with ${lastSet.reps} reps. Maintain current weight for this set.`;
+      recommendation = `Ottima esecuzione a RPE ${lastSet.rpe} con ${lastSet.reps} rip. Mantieni il carico attuale.`;
     }
 
     const suggestedWeight = Math.max(0, lastSet.weightKg + weightAdjustment);
@@ -202,7 +210,7 @@ Generate a complete ${profile.trainingDaysPerWeek}-day program. Return ONLY this
       recommendation,
       adjustedWeight: weightAdjustment !== 0 ? suggestedWeight : null,
       adjustedReps: null,
-      reasoning: `Based on previous ${previousSets.length} sets and target RPE ${targetRpe}.`,
+      reasoning: `Basato sulle ultime ${previousSets.length} serie e target RPE ${targetRpe}.`,
     };
   }
 }
