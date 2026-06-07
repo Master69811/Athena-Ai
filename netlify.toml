@@ -1,0 +1,22 @@
+# Netlify deploy config for the Athena AI web app (pnpm + TurboRepo monorepo).
+# The web app lives in apps/web; Netlify builds from there.
+
+[build]
+  base = "apps/web"
+  command = "next build"
+  publish = "apps/web/.next"
+
+[build.environment]
+  NPM_FLAGS = "--version"   # let pnpm handle install
+  PNPM_VERSION = "9"
+
+# Official Next.js runtime (SSR, image optimization, routing).
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Service worker must be allowed at root scope and not over-cached.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Service-Worker-Allowed = "/"
+    Cache-Control = "public, max-age=0, must-revalidate"

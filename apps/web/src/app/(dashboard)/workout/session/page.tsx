@@ -43,19 +43,25 @@ export default function SessionPage() {
   const startMutation = useMutation({
     mutationFn: (data: any) => sessionsApi.start(data),
     onSuccess: (res: any) => {
-      const id = res.data.id;
+      const id = res?.data?.id;
+      if (!id) { toast.error('Impossibile avviare la sessione'); return; }
       setSessionId(id);
       startSession(id);
       toast.success('Allenamento iniziato!');
+    },
+    onError: (e: any) => {
+      setSessionId(null);
+      toast.error(e?.message || 'Impossibile avviare l\'allenamento');
     },
   });
 
   const logSetMutation = useMutation({
     mutationFn: ({ sessionId, data }: any) => sessionsApi.logSet(sessionId, data),
     onSuccess: (res: any) => {
-      setCompletedSets(prev => [...prev, res.data]);
+      if (res?.data) setCompletedSets(prev => [...prev, res.data]);
       fetchAiRecommendation();
     },
+    onError: (e: any) => toast.error(e?.message || 'Serie non salvata, riprova'),
   });
 
   const completeMutation = useMutation({
@@ -65,6 +71,7 @@ export default function SessionPage() {
       toast.success('Allenamento completato! Ottimo lavoro!');
       router.push('/workout/history');
     },
+    onError: (e: any) => toast.error(e?.message || 'Impossibile completare la sessione'),
   });
 
   const currentDay = activePlan?.days?.[0];
@@ -101,7 +108,7 @@ export default function SessionPage() {
         targetRepsMax: currentExercise.repsMax,
         targetRpe: currentExercise.rpeTarget || 8,
       });
-      setAiRecommendation((res as any).data?.recommendation);
+      setAiRecommendation((res as any)?.data?.recommendation || null);
     } catch {}
   }, [completedSets, currentExercise, sessionId]);
 
@@ -127,7 +134,11 @@ export default function SessionPage() {
       setRestSeconds(currentExercise.restSeconds || 90);
     }
     setIsWarmup(false);
-    toast.success(`Serie ${currentSet} completata! ${weight}kg × ${reps} rip @ RPE ${rpe}`);
+    if (isWarmup) {
+      toast.success(`Riscaldamento registrato: ${weight}kg × ${reps} rip`);
+    } else {
+      toast.success(`Serie ${currentSet} completata! ${weight}kg × ${reps} rip @ RPE ${rpe}`);
+    }
   };
 
   const handleNextExercise = () => {
@@ -157,11 +168,11 @@ export default function SessionPage() {
   }
 
   return (
-    <div className="max-w-lg mx-auto space-y-4 pb-4">
-      
+    <div className="max-w-lg mx-auto space-y-4 pb-32 lg:pb-6">
+
       {/* Header Progress */}
       <div className="flex items-center justify-between">
-        <button onClick={() => router.push('/workout')} className="text-muted-foreground hover:text-foreground">
+        <button onClick={() => router.push('/workout')} aria-label="Esci dall'allenamento" className="w-9 h-9 -ml-1.5 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:scale-95 transition-all touch-manipulation">
           <X className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-2">
@@ -172,7 +183,7 @@ export default function SessionPage() {
             />
           ))}
         </div>
-        <span className="text-sm text-muted-foreground">{currentExIdx + 1}/{totalExercises}</span>
+        <span className="text-sm font-medium text-muted-foreground tabular-nums">{currentExIdx + 1}/{totalExercises}</span>
       </div>
 
       {/* Rest Timer */}
@@ -233,7 +244,7 @@ export default function SessionPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setWeight(w => Math.max(0, Math.round((w - 2.5) * 10) / 10))}
-                className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors"
+                className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 active:scale-95 transition-all touch-manipulation focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
                 <Minus className="w-4 h-4" />
               </button>
@@ -242,7 +253,7 @@ export default function SessionPage() {
               </div>
               <button
                 onClick={() => setWeight(w => Math.round((w + 2.5) * 10) / 10)}
-                className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors"
+                className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 active:scale-95 transition-all touch-manipulation focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
                 <Plus className="w-4 h-4" />
               </button>
@@ -253,7 +264,7 @@ export default function SessionPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setReps(r => Math.max(1, r - 1))}
-                className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors"
+                className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 active:scale-95 transition-all touch-manipulation focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
                 <Minus className="w-4 h-4" />
               </button>
@@ -262,7 +273,7 @@ export default function SessionPage() {
               </div>
               <button
                 onClick={() => setReps(r => r + 1)}
-                className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 transition-colors"
+                className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center hover:bg-primary/10 active:scale-95 transition-all touch-manipulation focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
                 <Plus className="w-4 h-4" />
               </button>

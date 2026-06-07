@@ -140,6 +140,42 @@ enum FatigueLevel {
   OVERTRAINED
 }
 
+enum RecoveryTrend {
+  IMPROVING
+  STABLE
+  DECLINING
+  INSUFFICIENT_DATA
+}
+
+enum OverreachingRisk {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum EngineAction {
+  PROCEED
+  CAUTION
+  HOLD
+  DELOAD
+}
+
+enum WeightTrend {
+  LOSING_FAST
+  LOSING_ON_TRACK
+  STABLE
+  GAINING_ON_TRACK
+  GAINING_FAST
+  INSUFFICIENT_DATA
+}
+
+enum NutritionDecisionType {
+  CALORIE_DECREASE
+  CALORIE_INCREASE
+  MAINTAIN
+}
+
 enum TrainerClientStatus {
   PENDING
   ACTIVE
@@ -182,6 +218,20 @@ enum ProgressionAction {
   CHANGE_EXERCISE
 }
 
+enum AdjustmentType {
+  WEIGHT_INCREASE
+  WEIGHT_DECREASE
+  REPS_INCREASE
+  REPS_DECREASE
+  SETS_INCREASE
+  SETS_DECREASE
+  DELOAD
+  DELOAD_END
+  EXERCISE_SWAP
+  RPE_ADJUST
+  PROGRESSION_HELD
+}
+
 model User {
   id              String           @id @default(cuid())
   email           String           @unique
@@ -212,9 +262,15 @@ model User {
   progressPhotos  ProgressPhoto[]
   videoAnalyses   VideoAnalysis[]
   weeklyChecks    WeeklyNutritionCheck[]
-  progressions    AIProgressionDecision[]
-  exercise1RMs    Exercise1RM[]
-  createdExercises Exercise[]      @relation("ExerciseCreator")
+  progressions        AIProgressionDecision[]
+  programVersions     ProgramVersion[]
+  programAdjustments  ProgramAdjustment[]
+  recoverySnapshots   RecoverySnapshot[]
+  bodyWeightEntries   BodyWeightEntry[]
+  bodyWeightSnapshots BodyWeightSnapshot[]
+  nutritionDecisions  NutritionDecision[]
+  exercise1RMs        Exercise1RM[]
+  createdExercises    Exercise[]      @relation("ExerciseCreator")
 
   trainerClients  TrainerClient[]  @relation("TrainerToClient")
   clientOf        TrainerClient[]  @relation("ClientToTrainer")
@@ -285,7 +341,7 @@ model BodyMeasurement {
 
 model Exercise {
   id              String              @id @default(cuid())
-  name            String
+  name            String              @unique
   nameIt          String?
   category        ExerciseCategory
   muscleGroups    MuscleGroup[]
@@ -307,10 +363,11 @@ model Exercise {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
-  creator         User?               @relation("ExerciseCreator", fields: [creatorId], references: [id])
-  workoutExercises WorkoutExercise[]
-  sets            WorkoutSet[]
-  exercise1RMs    Exercise1RM[]
+  creator              User?                   @relation("ExerciseCreator", fields: [creatorId], references: [id])
+  workoutExercises     WorkoutExercise[]
+  sets                 WorkoutSet[]
+  exercise1RMs         Exercise1RM[]
+  progressionDecisions AIProgressionDecision[]
 
   @@index([name])
   @@index([category])
@@ -334,9 +391,11 @@ model WorkoutPlan {
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
-  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  days    WorkoutDay[]
-  sessions WorkoutSession[]
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  days        WorkoutDay[]
+  sessions    WorkoutSession[]
+  versions    ProgramVersion[]
+  adjustments ProgramAdjustment[]
 
   @@index([userId])
   @@map("workout_plans")
@@ -360,21 +419,24 @@ model WorkoutDay {
 }
 
 model WorkoutExercise {
-  id           String  @id @default(cuid())
-  dayId        String
-  exerciseId   String
-  order        Int
-  sets         Int
-  repsMin      Int
-  repsMax      Int
-  rpeTarget    Float?
-  rirTarget    Int?
-  restSeconds  Int     @default(90)
-  notes        String?
-  supersetGroup String?
+  id                  String  @id @default(cuid())
+  dayId               String
+  exerciseId          String
+  order               Int
+  sets                Int
+  repsMin             Int
+  repsMax             Int
+  rpeTarget           Float?
+  rirTarget           Int?
+  restSeconds         Int     @default(90)
+  notes               String?
+  supersetGroup       String?
+  recommendedWeightKg Float?
+  deloadActive        Boolean @default(false)
 
-  day      WorkoutDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
-  exercise Exercise   @relation(fields: [exerciseId], references: [id])
+  day         WorkoutDay          @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  exercise    Exercise             @relation(fields: [exerciseId], references: [id])
+  adjustments ProgramAdjustment[]
 
   @@index([dayId])
   @@map("workout_exercises")
@@ -443,21 +505,77 @@ model Exercise1RM {
 }
 
 model AIProgressionDecision {
-  id          String            @id @default(cuid())
-  userId      String
-  exerciseId  String
-  action      ProgressionAction
-  oldWeight   Float?
-  newWeight   Float?
-  oldReps     Int?
-  newReps     Int?
-  reasoning   String
-  appliedAt   DateTime          @default(now())
+  id                 String            @id @default(cuid())
+  userId             String
+  exerciseId         String
+  action             ProgressionAction
+  oldWeight          Float?
+  newWeight          Float?
+  oldReps            Int?
+  newReps            Int?
+  reasoning          String
+  isRead             Boolean           @default(false)
+  isApplied          Boolean           @default(false)
+  appliedToVersionId String?
+  evidenceData       Json?
+  appliedAt          DateTime          @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise    Exercise             @relation(fields: [exerciseId], references: [id])
+  adjustments ProgramAdjustment[]
 
   @@index([userId])
+  @@index([userId, isRead])
+  @@index([userId, isApplied])
   @@map("ai_progression_decisions")
+}
+
+model ProgramVersion {
+  id            String   @id @default(cuid())
+  userId        String
+  planId        String
+  versionNumber Int
+  snapshot      Json
+  triggerReason String
+  createdAt     DateTime @default(now())
+
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan        WorkoutPlan        @relation(fields: [planId], references: [id], onDelete: Cascade)
+  adjustments ProgramAdjustment[]
+
+  @@index([planId])
+  @@index([userId])
+  @@map("program_versions")
+}
+
+model ProgramAdjustment {
+  id              String         @id @default(cuid())
+  userId          String
+  planId          String
+  planExerciseId  String?
+  versionId       String
+  decisionId      String?
+  type            AdjustmentType
+  field           String
+  oldValue        Json
+  newValue        Json
+  rationale       String
+  isReverted      Boolean        @default(false)
+  revertedAt      DateTime?
+  revertAfterDate DateTime?
+  appliedAt       DateTime       @default(now())
+
+  user         User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan         WorkoutPlan             @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planExercise WorkoutExercise?        @relation(fields: [planExerciseId], references: [id])
+  version      ProgramVersion          @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  decision     AIProgressionDecision?  @relation(fields: [decisionId], references: [id])
+
+  @@index([planId])
+  @@index([planExerciseId])
+  @@index([decisionId])
+  @@index([revertAfterDate])
+  @@map("program_adjustments")
 }
 
 model NutritionPlan {
@@ -475,8 +593,9 @@ model NutritionPlan {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  weeklyChecks WeeklyNutritionCheck[]
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weeklyChecks      WeeklyNutritionCheck[]
+  nutritionDecisions NutritionDecision[]
 
   @@index([userId])
   @@map("nutrition_plans")
@@ -540,6 +659,61 @@ model WeeklyNutritionCheck {
   @@map("weekly_nutrition_checks")
 }
 
+model BodyWeightEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime
+  weightKg  Float
+  notes     String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("body_weight_entries")
+}
+
+model BodyWeightSnapshot {
+  id             String      @id @default(cuid())
+  userId         String
+  ma7d           Float
+  ma14d          Float
+  weeklyRateKg   Float
+  trendDirection WeightTrend
+  logCount       Int
+  pred4wKg       Float?
+  pred12wKg      Float?
+  confidenceScore Float?
+  computedAt     DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, computedAt])
+  @@map("body_weight_snapshots")
+}
+
+model NutritionDecision {
+  id           String                @id @default(cuid())
+  userId       String
+  planId       String?
+  type         NutritionDecisionType
+  deltaCalories Float
+  rationale    String
+  evidenceData Json
+  isApplied    Boolean               @default(false)
+  appliedAt    DateTime?
+  isRead       Boolean               @default(false)
+  createdAt    DateTime              @default(now())
+
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan NutritionPlan? @relation(fields: [planId], references: [id])
+
+  @@index([userId, isApplied])
+  @@index([userId, createdAt])
+  @@map("nutrition_decisions")
+}
+
 model RecoveryLog {
   id           String       @id @default(cuid())
   userId       String
@@ -561,6 +735,27 @@ model RecoveryLog {
   @@unique([userId, date])
   @@index([userId])
   @@map("recovery_logs")
+}
+
+model RecoverySnapshot {
+  id                 String           @id @default(cuid())
+  userId             String
+  windowDays         Int
+  avgScore           Float
+  minScore           Float
+  maxScore           Float
+  logCount           Int
+  consecutiveLowDays Int
+  trendDirection     RecoveryTrend
+  overreachingRisk   OverreachingRisk
+  engineAction       EngineAction
+  computedAt         DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, computedAt])
+  @@index([userId, windowDays])
+  @@map("recovery_snapshots")
 }
 
 model AIConversation {

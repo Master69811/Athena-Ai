@@ -8,6 +8,26 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
+function validateSecrets(configService: ConfigService): void {
+  const PLACEHOLDERS = [
+    'your-super-secret-jwt-key-change-this-in-production',
+    'your-refresh-secret-key-change-this-in-production',
+    'CHANGE_ME',
+    '',
+  ];
+  const MIN_LENGTH = 32;
+
+  for (const key of ['JWT_SECRET', 'JWT_REFRESH_SECRET']) {
+    const value = configService.get<string>(key);
+    if (!value || value.length < MIN_LENGTH || PLACEHOLDERS.some((p) => value.includes(p))) {
+      throw new Error(
+        `[STARTUP] ${key} is missing, too short, or uses a placeholder value. ` +
+          `Generate a secure value with: openssl rand -base64 64`,
+      );
+    }
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log'],
@@ -17,6 +37,10 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3001);
   const frontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+
+  if (configService.get<string>('NODE_ENV') === 'production') {
+    validateSecrets(configService);
+  }
 
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(compression());
@@ -34,7 +58,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: false,
+      forbidNonWhitelisted: true,
       transform: true,
       transformOptions: { enableImplicitConversion: true },
     }),

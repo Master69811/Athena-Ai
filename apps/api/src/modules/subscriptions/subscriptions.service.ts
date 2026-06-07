@@ -47,7 +47,8 @@ export class SubscriptionsService {
     try {
       event = this.stripe.webhooks.constructEvent(payload, signature, webhookSecret);
     } catch (err) {
-      this.logger.error(`Webhook signature verification failed: ${err.message}`);
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Webhook signature verification failed: ${message}`);
       throw new Error('Invalid webhook signature');
     }
 

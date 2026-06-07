@@ -28,4 +28,10 @@ export class RecoveryController {
   async getHistory(@CurrentUser('id') userId: string, @Query('days') days?: number) {
     return this.recoveryService.getRecoveryHistory(userId, days);
   }
+
+  @Get('snapshot')
+  @ApiOperation({ summary: 'Get latest recovery engine snapshot (7-day context)' })
+  async getSnapshot(@CurrentUser('id') userId: string) {
+    return this.recoveryService.getLatestSnapshot(userId);
+  }
 }
