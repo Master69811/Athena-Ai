@@ -1,16 +1,18 @@
 {
-  "name": "Athena AI — Elite AI Fitness Coach",
+  "name": "Athena AI — Coach Personale",
   "short_name": "Athena AI",
-  "description": "Personalized training, nutrition, and recovery — powered by cutting-edge AI.",
-  "start_url": "/",
+  "description": "Il tuo coach AI personale. Allenamento, nutrizione e recupero — tutto automatico.",
+  "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
   "background_color": "#0a0a0f",
   "theme_color": "#6366f1",
   "lang": "it",
   "dir": "ltr",
   "categories": ["health", "fitness", "lifestyle"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -35,6 +37,27 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Inizia Allenamento",
+      "short_name": "Allenamento",
+      "url": "/workout/session",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Coach AI",
+      "short_name": "Coach",
+      "url": "/coach",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
