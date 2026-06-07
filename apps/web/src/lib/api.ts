@@ -101,6 +101,7 @@ export const recoveryApi = {
 // AI Coach
 export const coachApi = {
   chat: (data: any) => api.post('/ai-coach/chat', data),
+  chatStream: (data: any) => api.post('/ai-coach/chat/stream', data),
   getConversations: () => api.get('/ai-coach/conversations'),
   getConversation: (id: string) => api.get(`/ai-coach/conversations/${id}`),
   getSuggestions: () => api.get('/ai-coach/suggestions'),
