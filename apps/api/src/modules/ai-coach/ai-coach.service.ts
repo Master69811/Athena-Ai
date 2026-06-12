@@ -1,14 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AiCoachService {
-  private anthropic: Anthropic;
+  private genAI: GoogleGenerativeAI;
 
   constructor(private prisma: PrismaService, private configService: ConfigService) {
-    this.anthropic = new Anthropic({ apiKey: this.configService.get('ANTHROPIC_API_KEY') });
+    this.genAI = new GoogleGenerativeAI(this.configService.get('GEMINI_API_KEY', ''));
   }
 
   private async buildSystemPrompt(userId: string): Promise<string> {
@@ -99,37 +99,39 @@ ${recentSessions.length > 0 ? `Last ${recentSessions.length} sessions logged.` :
     });
 
     const systemPrompt = await this.buildSystemPrompt(userId);
+    const modelName = this.configService.get('GEMINI_MODEL', 'gemini-2.0-flash');
 
-    const messages: Anthropic.MessageParam[] = previousMessages
-      .filter(m => m.role !== 'SYSTEM')
-      .map(m => ({
-        role: m.role === 'USER' ? 'user' : 'assistant',
-        content: m.content,
-      }));
-
-    const response = await this.anthropic.messages.create({
-      model: this.configService.get('ANTHROPIC_MODEL', 'claude-opus-4-8'),
-      max_tokens: 2000,
-      system: systemPrompt,
-      messages,
+    const model = this.genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: systemPrompt,
+      generationConfig: { maxOutputTokens: 2048, temperature: 0.8 },
     });
 
-    const aiContent = response.content[0];
-    if (aiContent.type !== 'text') throw new Error('Invalid response from AI');
+    // Build history: all messages except the current user message (last item)
+    const filteredMessages = previousMessages.filter(m => m.role !== 'SYSTEM');
+    const history = filteredMessages.slice(0, -1).map(m => ({
+      role: m.role === 'USER' ? ('user' as const) : ('model' as const),
+      parts: [{ text: m.content }],
+    }));
+
+    const chat = model.startChat({ history });
+    const result = await chat.sendMessage(message);
+    const aiText = result.response.text();
+    const outputTokens = result.response.usageMetadata?.candidatesTokenCount ?? 0;
 
     const aiMessage = await this.prisma.aIMessage.create({
       data: {
         conversationId: conversation.id,
         role: 'ASSISTANT',
-        content: aiContent.text,
-        tokens: response.usage.output_tokens,
+        content: aiText,
+        tokens: outputTokens,
       },
     });
 
     return {
       conversationId: conversation.id,
       message: aiMessage,
-      usage: response.usage,
+      usage: { output_tokens: outputTokens },
     };
   }
 

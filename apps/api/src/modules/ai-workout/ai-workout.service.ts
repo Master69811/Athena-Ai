@@ -1,15 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PrismaService } from '../prisma/prisma.service';
 import { TrainingMethodology, GoalType, ExperienceLevel } from '@prisma/client';
 
 @Injectable()
 export class AiWorkoutService {
-  private anthropic: Anthropic;
+  private genAI: GoogleGenerativeAI;
 
   constructor(private prisma: PrismaService, private configService: ConfigService) {
-    this.anthropic = new Anthropic({ apiKey: this.configService.get('ANTHROPIC_API_KEY') });
+    this.genAI = new GoogleGenerativeAI(this.configService.get('GEMINI_API_KEY', ''));
   }
 
   async generateWorkoutPlan(userId: string) {
@@ -21,7 +21,7 @@ export class AiWorkoutService {
       take: 100,
     });
 
-    const systemPrompt = `You are Athena, the world's best AI personal trainer and strength coach. You combine the knowledge of the top coaches including Renaissance Periodization, Project Invictus, Jim Wendler, and elite sports science researchers. 
+    const systemPrompt = `You are Athena, the world's best AI personal trainer and strength coach. You combine the knowledge of the top coaches including Renaissance Periodization, Project Invictus, Jim Wendler, and elite sports science researchers.
 
 You generate COMPLETE, DETAILED, PERSONALIZED workout programs that are:
 - Scientifically evidence-based
@@ -85,19 +85,19 @@ Generate a complete ${profile.trainingDaysPerWeek}-day program. Return ONLY this
   ]
 }`;
 
-    const response = await this.anthropic.messages.create({
-      model: this.configService.get('ANTHROPIC_MODEL', 'claude-opus-4-8'),
-      max_tokens: 8000,
-      messages: [{ role: 'user', content: userMessage }],
-      system: systemPrompt,
+    const modelName = this.configService.get('GEMINI_MODEL', 'gemini-2.0-flash');
+    const model = this.genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction: systemPrompt,
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.7 },
     });
 
-    const content = response.content[0];
-    if (content.type !== 'text') throw new Error('Invalid AI response');
+    const result = await model.generateContent(userMessage);
+    const content = result.response.text();
 
     let planData: any;
     try {
-      const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('No JSON found in response');
       planData = JSON.parse(jsonMatch[0]);
     } catch (e) {
@@ -178,7 +178,6 @@ Generate a complete ${profile.trainingDaysPerWeek}-day program. Return ONLY this
 
     const lastSet = previousSets[previousSets.length - 1];
     const rpeDiff = lastSet.rpe - targetRpe;
-    const repDiff = lastSet.reps - targetRepsMin;
 
     let weightAdjustment = 0;
     let recommendation = '';
