@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { sessionsApi, workoutApi } from '@/lib/api';
+import { sessionsApi, workoutApi, recoveryApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -11,11 +11,27 @@ import { useWorkoutStore } from '@/store/workout.store';
 import { useRouter } from 'next/navigation';
 import {
   Timer, ChevronRight, ChevronLeft, Check, Zap, Brain,
-  Plus, Minus, Flag, X, RotateCcw,
+  Plus, Minus, Flag, X, RotateCcw, Gauge,
 } from 'lucide-react';
 
 const RPE_LABELS: Record<number, string> = {
   6: 'Facile', 7: 'Moderato', 8: 'Difficile', 9: 'Molto Difficile', 10: 'Massimale',
+};
+
+type ReadinessAdaptation = {
+  intensity: 'full' | 'moderate' | 'reduced' | 'rest';
+  setMultiplier: number;
+  rpeAdjustment: number;
+  titleIt: string;
+  detailIt: string;
+  color: 'green' | 'yellow' | 'orange' | 'red';
+};
+
+const READINESS_BANNER: Record<ReadinessAdaptation['color'], string> = {
+  green: 'bg-green-500/10 border-green-500/25 text-green-400',
+  yellow: 'bg-yellow-500/10 border-yellow-500/25 text-yellow-400',
+  orange: 'bg-orange-500/10 border-orange-500/25 text-orange-400',
+  red: 'bg-red-500/10 border-red-500/25 text-red-400',
 };
 
 export default function SessionPage() {
@@ -38,6 +54,15 @@ export default function SessionPage() {
     queryKey: ['active-plan'],
     queryFn: workoutApi.getActivePlan,
     select: (res: any) => res.data,
+  });
+
+  const { data: readiness } = useQuery({
+    queryKey: ['recovery-readiness'],
+    queryFn: async () => {
+      const res = await recoveryApi.getReadiness() as any;
+      return res.data as { hasData: boolean; score: number; adaptation: ReadinessAdaptation };
+    },
+    staleTime: 5 * 60_000,
   });
 
   const startMutation = useMutation({
@@ -79,6 +104,21 @@ export default function SessionPage() {
   const currentExercise = exercises[currentExIdx];
   const totalExercises = exercises.length;
 
+  // Recovery-driven adaptation of today's targets (sets + RPE).
+  const adaptation = readiness?.hasData ? readiness.adaptation : null;
+  const adaptedSets = currentExercise
+    ? Math.max(1, Math.round(currentExercise.sets * (adaptation?.setMultiplier ?? 1)))
+    : 0;
+  const adaptedRpeTarget = currentExercise
+    ? Math.min(10, Math.max(5, (currentExercise.rpeTarget || 8) + (adaptation?.rpeAdjustment ?? 0)))
+    : 8;
+
+  // Seed the RPE selector with the (adapted) target when switching exercises.
+  useEffect(() => {
+    if (currentExercise) setRpe(adaptedRpeTarget);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentExIdx, readiness?.hasData]);
+
   useEffect(() => {
     if (!sessionId && activePlan) {
       startMutation.mutate({ planId: activePlan.id, dayId: currentDay?.id });
@@ -103,14 +143,14 @@ export default function SessionPage() {
       const res = await sessionsApi.getSetRecommendation({
         exerciseId: currentExercise.exerciseId,
         previousSets: exerciseSets.map(s => ({ weightKg: s.weightKg, reps: s.reps, rpe: s.rpe || 8 })),
-        targetSets: currentExercise.sets,
+        targetSets: adaptedSets,
         targetRepsMin: currentExercise.repsMin,
         targetRepsMax: currentExercise.repsMax,
-        targetRpe: currentExercise.rpeTarget || 8,
+        targetRpe: adaptedRpeTarget,
       });
       setAiRecommendation((res as any)?.data?.recommendation || null);
     } catch {}
-  }, [completedSets, currentExercise, sessionId]);
+  }, [completedSets, currentExercise, sessionId, adaptedSets, adaptedRpeTarget]);
 
   const handleLogSet = () => {
     if (!sessionId || !currentExercise) return;
@@ -186,6 +226,22 @@ export default function SessionPage() {
         <span className="text-sm font-medium text-muted-foreground tabular-nums">{currentExIdx + 1}/{totalExercises}</span>
       </div>
 
+      {/* Recovery adaptation banner */}
+      {adaptation && adaptation.intensity !== 'full' && (
+        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
+          <div className={`flex items-start gap-3 p-3 rounded-xl border ${READINESS_BANNER[adaptation.color]}`}>
+            <Gauge className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-xs font-bold">Adattato al recupero · {adaptation.titleIt}</p>
+              <p className="text-xs opacity-80 leading-relaxed mt-0.5">
+                Target di oggi: volume {Math.round(adaptation.setMultiplier * 100)}%
+                {adaptation.rpeAdjustment !== 0 && <> · RPE {adaptation.rpeAdjustment > 0 ? '+' : ''}{adaptation.rpeAdjustment}</>}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Rest Timer */}
       <AnimatePresence>
         {isResting && (
@@ -217,11 +273,11 @@ export default function SessionPage() {
                 </p>
                 <h2 className="text-xl font-bold">{currentExercise.exercise?.name || 'Esercizio'}</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {currentExercise.sets} serie · {currentExercise.repsMin}–{currentExercise.repsMax} rip · RPE {currentExercise.rpeTarget || 8} · {Math.floor((currentExercise.restSeconds || 90) / 60)}:{String((currentExercise.restSeconds || 90) % 60).padStart(2,'0')} recupero
+                  {adaptedSets} serie · {currentExercise.repsMin}–{currentExercise.repsMax} rip · RPE {adaptedRpeTarget} · {Math.floor((currentExercise.restSeconds || 90) / 60)}:{String((currentExercise.restSeconds || 90) % 60).padStart(2,'0')} recupero
                 </p>
               </div>
               <span className="bg-primary/10 text-primary text-xs font-bold px-2.5 py-1 rounded-lg">
-                Serie {currentSet}/{currentExercise.sets}
+                Serie {currentSet}/{adaptedSets}
               </span>
             </div>
 

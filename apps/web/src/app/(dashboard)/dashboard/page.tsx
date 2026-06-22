@@ -11,7 +11,7 @@ import { RecoveryModal } from '@/components/recovery/RecoveryModal';
 import {
   AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip,
 } from 'recharts';
-import { Flame, Dumbbell, TrendingUp, Zap, ChevronRight, Brain, Activity, Scale, Utensils, AlertTriangle, HeartPulse } from 'lucide-react';
+import { Flame, Dumbbell, TrendingUp, Zap, ChevronRight, Brain, Activity, Scale, Utensils, AlertTriangle, HeartPulse, Gauge } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { getRecoveryColor, getRecoveryLabel } from '@/lib/utils';
@@ -42,6 +42,29 @@ const ENGINE_ACTION_LABELS: Record<string, string> = {
   CAUTION: 'Cautela',
   HOLD: 'Progressione sospesa',
   DELOAD: 'Deload attivo',
+};
+
+type ReadinessAdaptation = {
+  intensity: 'full' | 'moderate' | 'reduced' | 'rest';
+  setMultiplier: number;
+  rpeAdjustment: number;
+  titleIt: string;
+  detailIt: string;
+  color: 'green' | 'yellow' | 'orange' | 'red';
+};
+type Readiness = {
+  hasData: boolean;
+  score: number;
+  engineAction: string;
+  adaptation: ReadinessAdaptation;
+  summary: string;
+};
+
+const READINESS_STYLES: Record<ReadinessAdaptation['color'], { bg: string; ring: string; text: string; dot: string }> = {
+  green: { bg: 'from-green-500/10 to-green-500/5 border-green-500/25', ring: 'text-green-400', text: 'text-green-400', dot: 'bg-green-400' },
+  yellow: { bg: 'from-yellow-500/10 to-yellow-500/5 border-yellow-500/25', ring: 'text-yellow-400', text: 'text-yellow-400', dot: 'bg-yellow-400' },
+  orange: { bg: 'from-orange-500/10 to-orange-500/5 border-orange-500/25', ring: 'text-orange-400', text: 'text-orange-400', dot: 'bg-orange-400' },
+  red: { bg: 'from-red-500/10 to-red-500/5 border-red-500/25', ring: 'text-red-400', text: 'text-red-400', dot: 'bg-red-400' },
 };
 
 const fadeInUp = {
@@ -99,6 +122,15 @@ export default function DashboardPage() {
     queryKey: ['recovery-latest'],
     queryFn: recoveryApi.getLatest,
     select: (res: any) => res.data,
+  });
+
+  const { data: readiness } = useQuery<Readiness | null>({
+    queryKey: ['recovery-readiness'],
+    queryFn: async () => {
+      const res = await recoveryApi.getReadiness() as any;
+      return res.data as Readiness;
+    },
+    staleTime: 5 * 60_000,
   });
 
   const { data: activePlan } = useQuery({
@@ -194,6 +226,58 @@ export default function DashboardPage() {
           </div>
         </Card>
       </motion.div>
+
+      {/* Today's Readiness — recovery-driven training adaptation */}
+      {readiness?.hasData && (() => {
+        const s = READINESS_STYLES[readiness.adaptation.color];
+        const a = readiness.adaptation;
+        return (
+          <motion.div variants={fadeInUp}>
+            <Card className={`bg-gradient-to-r ${s.bg} border`}>
+              <div className="flex items-start gap-4">
+                <div className="relative flex-shrink-0">
+                  <svg width="60" height="60" viewBox="0 0 60 60">
+                    <circle cx="30" cy="30" r="25" fill="none" stroke="hsl(240 8% 14%)" strokeWidth="6" />
+                    <circle
+                      cx="30" cy="30" r="25" fill="none" strokeWidth="6" strokeLinecap="round"
+                      className={s.ring} stroke="currentColor"
+                      strokeDasharray={`${2 * Math.PI * 25}`}
+                      strokeDashoffset={`${2 * Math.PI * 25 * (1 - readiness.score / 100)}`}
+                      transform="rotate(-90 30 30)"
+                      style={{ transition: 'stroke-dashoffset 1s ease-in-out' }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className={`text-lg font-bold ${s.text}`}>{readiness.score}</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Gauge className={`w-4 h-4 ${s.text}`} />
+                    <p className="text-xs text-muted-foreground font-semibold tracking-wide">PRONTEZZA DI OGGI</p>
+                  </div>
+                  <p className={`text-base font-bold ${s.text}`}>{a.titleIt}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed mt-1">{a.detailIt}</p>
+                  {a.intensity !== 'full' && (
+                    <div className="flex flex-wrap gap-2 mt-2.5">
+                      {a.setMultiplier !== 1 && (
+                        <span className={`text-xs px-2 py-1 rounded-lg bg-muted/60 font-medium`}>
+                          Volume {Math.round(a.setMultiplier * 100)}%
+                        </span>
+                      )}
+                      {a.rpeAdjustment !== 0 && (
+                        <span className={`text-xs px-2 py-1 rounded-lg bg-muted/60 font-medium`}>
+                          RPE {a.rpeAdjustment > 0 ? '+' : ''}{a.rpeAdjustment}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+        );
+      })()}
 
       {/* KPI Grid */}
       <motion.div variants={fadeInUp} className="grid grid-cols-2 lg:grid-cols-4 gap-4">

@@ -84,6 +84,39 @@ describe('RecoveryService', () => {
     });
   });
 
+  // ─── computeTrainingAdaptation (daily readiness) ─────────────────────────
+
+  describe('computeTrainingAdaptation', () => {
+    it('returns full intensity for PROCEED', () => {
+      const a = service.computeTrainingAdaptation({ score: 80, engineAction: EngineAction.PROCEED, hasEnoughData: true });
+      expect(a.intensity).toBe('full');
+      expect(a.setMultiplier).toBe(1.0);
+      expect(a.rpeAdjustment).toBe(0);
+      expect(a.color).toBe('green');
+    });
+
+    it('reduces volume for HOLD', () => {
+      const a = service.computeTrainingAdaptation({ score: 45, engineAction: EngineAction.HOLD, hasEnoughData: true });
+      expect(a.intensity).toBe('reduced');
+      expect(a.setMultiplier).toBeLessThan(1);
+      expect(a.rpeAdjustment).toBeLessThan(0);
+    });
+
+    it('recommends rest/deload for DELOAD', () => {
+      const a = service.computeTrainingAdaptation({ score: 25, engineAction: EngineAction.DELOAD, hasEnoughData: true });
+      expect(a.intensity).toBe('rest');
+      expect(a.color).toBe('red');
+      expect(a.setMultiplier).toBeLessThanOrEqual(0.6);
+    });
+
+    it('derives the action from todays score when 7-day data is insufficient', () => {
+      const fresh = service.computeTrainingAdaptation({ score: 85, engineAction: EngineAction.DELOAD, hasEnoughData: false });
+      expect(fresh.intensity).toBe('full'); // high score overrides stale engineAction
+      const tired = service.computeTrainingAdaptation({ score: 30, engineAction: EngineAction.PROCEED, hasEnoughData: false });
+      expect(tired.intensity).toBe('rest');
+    });
+  });
+
   // ─── computeRecoveryContext ──────────────────────────────────────────────
 
   describe('computeRecoveryContext', () => {

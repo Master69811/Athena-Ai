@@ -41,4 +41,10 @@ export class RecoveryController {
   async getSnapshot(@CurrentUser('id') userId: string) {
     return this.recoveryService.getLatestSnapshot(userId);
   }
+
+  @Get('readiness')
+  @ApiOperation({ summary: "Get today's training readiness and recovery-based workout adaptation" })
+  async getReadiness(@CurrentUser('id') userId: string) {
+    return this.recoveryService.getTrainingReadiness(userId);
+  }
 }

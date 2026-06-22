@@ -408,6 +408,93 @@ export class RecoveryService {
     return { log, recommendation, score, level, source: 'healthkit', estimated };
   }
 
+  // ─── Daily training readiness / adaptation ─────────────────────────────────
+
+  /**
+   * Translate recovery state into a concrete training adaptation for TODAY:
+   * how much to scale planned volume (sets) and intensity (RPE), with a
+   * human-readable recommendation. Pure function → unit-testable.
+   */
+  computeTrainingAdaptation(input: {
+    score: number;
+    engineAction: EngineAction;
+    hasEnoughData: boolean;
+  }): {
+    intensity: 'full' | 'moderate' | 'reduced' | 'rest';
+    setMultiplier: number;
+    rpeAdjustment: number;
+    titleIt: string;
+    detailIt: string;
+    color: 'green' | 'yellow' | 'orange' | 'red';
+  } {
+    // With <3 days of data the 7-day engine isn't reliable: derive an action
+    // from today's single score using the same thresholds as the engine.
+    let action = input.engineAction;
+    if (!input.hasEnoughData) {
+      if (input.score >= 65) action = EngineAction.PROCEED;
+      else if (input.score >= 50) action = EngineAction.CAUTION;
+      else if (input.score >= 35) action = EngineAction.HOLD;
+      else action = EngineAction.DELOAD;
+    }
+
+    switch (action) {
+      case EngineAction.DELOAD:
+        return {
+          intensity: 'rest', setMultiplier: 0.6, rpeAdjustment: -2,
+          titleIt: 'Deload consigliato', color: 'red',
+          detailIt: 'Recupero critico: sessione leggera o riposo attivo. Spingere oggi aumenta il rischio di infortuni e peggiora l’adattamento.',
+        };
+      case EngineAction.HOLD:
+        return {
+          intensity: 'reduced', setMultiplier: 0.8, rpeAdjustment: -1,
+          titleIt: 'Volume ridotto', color: 'orange',
+          detailIt: 'Recupero basso: riduci il volume di circa il 20% e resta lontano dai massimali. Niente cedimento oggi.',
+        };
+      case EngineAction.CAUTION:
+        return {
+          intensity: 'moderate', setMultiplier: 0.9, rpeAdjustment: -1,
+          titleIt: 'Allenati con cautela', color: 'yellow',
+          detailIt: 'Recupero nella norma: mantieni l’intensità prevista ma fermati circa 1 RPE prima del cedimento.',
+        };
+      case EngineAction.PROCEED:
+      default:
+        return {
+          intensity: 'full', setMultiplier: 1.0, rpeAdjustment: 0,
+          titleIt: 'Allenati come previsto', color: 'green',
+          detailIt: 'Recupero ottimale: segui il piano e dai il massimo. Giornata ideale per progredire sui carichi.',
+        };
+    }
+  }
+
+  /**
+   * Combine today's recovery score with the 7-day engine context to produce a
+   * single "are you ready to train hard today?" answer for the app.
+   */
+  async getTrainingReadiness(userId: string) {
+    const [latest, ctx] = await Promise.all([
+      this.getLatestRecovery(userId),
+      this.getRecoveryContextForEngine(userId),
+    ]);
+
+    const score = latest.log ? Math.round(latest.score) : Math.round(ctx.avgScore7d || latest.score);
+    const adaptation = this.computeTrainingAdaptation({
+      score,
+      engineAction: ctx.engineAction,
+      hasEnoughData: ctx.hasEnoughData,
+    });
+
+    return {
+      hasData: latest.log != null,
+      score,
+      avgScore7d: ctx.avgScore7d,
+      level: latest.level,
+      engineAction: ctx.engineAction,
+      hasEnoughData: ctx.hasEnoughData,
+      adaptation,
+      summary: ctx.hasEnoughData ? ctx.summary : latest.recommendation,
+    };
+  }
+
   async getLatestRecovery(userId: string) {
     const log = await this.prisma.recoveryLog.findFirst({
       where: { userId },
