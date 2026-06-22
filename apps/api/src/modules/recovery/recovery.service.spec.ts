@@ -52,6 +52,38 @@ describe('RecoveryService', () => {
     });
   });
 
+  // ─── estimateSubjectiveMetrics (Apple Watch sync) ────────────────────────
+
+  describe('estimateSubjectiveMetrics', () => {
+    it('estimates high quality/energy and low stress from great objective data', () => {
+      const r = service.estimateSubjectiveMetrics({ sleepHours: 8, hrv: 75, restingHR: 50 });
+      expect(r.sleepQuality).toBeGreaterThanOrEqual(8);
+      expect(r.stressLevel).toBeLessThanOrEqual(3);
+      expect(r.energyLevel).toBeGreaterThanOrEqual(8);
+    });
+
+    it('estimates poor metrics from bad objective data', () => {
+      const r = service.estimateSubjectiveMetrics({ sleepHours: 4.5, hrv: 30, restingHR: 80 });
+      expect(r.sleepQuality).toBeLessThanOrEqual(4);
+      expect(r.stressLevel).toBeGreaterThanOrEqual(7);
+      expect(r.energyLevel).toBeLessThanOrEqual(4);
+    });
+
+    it('always returns values within 1-10', () => {
+      const r = service.estimateSubjectiveMetrics({});
+      for (const v of [r.sleepQuality, r.stressLevel, r.energyLevel]) {
+        expect(v).toBeGreaterThanOrEqual(1);
+        expect(v).toBeLessThanOrEqual(10);
+      }
+    });
+
+    it('falls back to resting HR for stress when HRV is missing', () => {
+      const low = service.estimateSubjectiveMetrics({ sleepHours: 7, restingHR: 50 });
+      const high = service.estimateSubjectiveMetrics({ sleepHours: 7, restingHR: 80 });
+      expect(low.stressLevel).toBeLessThan(high.stressLevel);
+    });
+  });
+
   // ─── computeRecoveryContext ──────────────────────────────────────────────
 
   describe('computeRecoveryContext', () => {

@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RecoveryService } from './recovery.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { SyncHealthKitDto } from './dto/sync-healthkit.dto';
 
 @ApiTags('recovery')
 @ApiBearerAuth()
@@ -15,6 +16,12 @@ export class RecoveryController {
   @ApiOperation({ summary: 'Log daily recovery data' })
   async log(@CurrentUser('id') userId: string, @Body() data: any) {
     return this.recoveryService.logRecovery(userId, data);
+  }
+
+  @Post('sync/healthkit')
+  @ApiOperation({ summary: 'Sync recovery data from Apple Health / Apple Watch (native iOS app)' })
+  async syncHealthKit(@CurrentUser('id') userId: string, @Body() data: SyncHealthKitDto) {
+    return this.recoveryService.syncFromHealthKit(userId, data);
   }
 
   @Get('latest')

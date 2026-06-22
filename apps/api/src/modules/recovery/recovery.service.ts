@@ -285,6 +285,129 @@ export class RecoveryService {
     return { log, recommendation, score, level };
   }
 
+  // ─── Apple Health / Apple Watch sync ───────────────────────────────────────
+
+  /**
+   * Estimate the subjective recovery metrics (sleep quality, stress, energy) from the
+   * objective data measured by the Apple Watch, so the user gets a recovery score
+   * automatically without filling in any slider. These are heuristics, not medical
+   * values — the user can always override them manually in the app.
+   */
+  estimateSubjectiveMetrics(data: { sleepHours?: number; hrv?: number; restingHR?: number }): {
+    sleepQuality: number;
+    stressLevel: number;
+    energyLevel: number;
+  } {
+    const clamp = (n: number) => Math.min(10, Math.max(1, Math.round(n)));
+
+    // Sleep quality: driven by duration, nudged by HRV.
+    const h = data.sleepHours ?? 7;
+    let sleepQuality: number;
+    if (h < 5) sleepQuality = 3;
+    else if (h < 6) sleepQuality = 5;
+    else if (h < 7) sleepQuality = 6;
+    else if (h <= 9) sleepQuality = 8;
+    else sleepQuality = 7; // oversleeping is slightly less restorative
+    if (data.hrv != null && data.hrv >= 60) sleepQuality += 1;
+    sleepQuality = clamp(sleepQuality);
+
+    // Stress: inverse of HRV (high HRV → low stress). Fallback to resting HR.
+    let stressLevel: number;
+    if (data.hrv != null) {
+      if (data.hrv >= 70) stressLevel = 2;
+      else if (data.hrv >= 55) stressLevel = 4;
+      else if (data.hrv >= 40) stressLevel = 6;
+      else stressLevel = 8;
+    } else if (data.restingHR != null) {
+      if (data.restingHR < 55) stressLevel = 3;
+      else if (data.restingHR < 65) stressLevel = 5;
+      else if (data.restingHR < 75) stressLevel = 7;
+      else stressLevel = 8;
+    } else {
+      stressLevel = 5;
+    }
+    stressLevel = clamp(stressLevel);
+
+    // Energy: blend of sleep quality and resting HR.
+    let rhrScore = 6;
+    if (data.restingHR != null) {
+      if (data.restingHR < 55) rhrScore = 9;
+      else if (data.restingHR < 65) rhrScore = 7;
+      else if (data.restingHR < 75) rhrScore = 5;
+      else rhrScore = 3;
+    }
+    const energyLevel = clamp((sleepQuality + rhrScore) / 2);
+
+    return { sleepQuality, stressLevel, energyLevel };
+  }
+
+  /**
+   * Ingest a day of Apple Watch data. Objective metrics overwrite existing values;
+   * subjective metrics are kept if already logged manually, otherwise estimated.
+   */
+  async syncFromHealthKit(
+    userId: string,
+    data: {
+      date: string;
+      sleepHours?: number;
+      hrv?: number;
+      restingHR?: number;
+      steps?: number;
+      sleepQuality?: number;
+      stressLevel?: number;
+      energyLevel?: number;
+      notes?: string;
+    },
+  ) {
+    const date = new Date(data.date);
+    const existing = await this.prisma.recoveryLog.findUnique({
+      where: { userId_date: { userId, date } },
+    });
+
+    const sleepHours = data.sleepHours ?? existing?.sleepHours ?? 7;
+    const hrv = data.hrv ?? existing?.hrv ?? undefined;
+    const restingHR = data.restingHR ?? existing?.restingHR ?? undefined;
+    const steps = data.steps ?? existing?.steps ?? 0;
+
+    const estimated = this.estimateSubjectiveMetrics({ sleepHours, hrv, restingHR });
+
+    // Priority: explicit value from app > previously logged manual value > estimate.
+    const sleepQuality = data.sleepQuality ?? existing?.sleepQuality ?? estimated.sleepQuality;
+    const stressLevel = data.stressLevel ?? existing?.stressLevel ?? estimated.stressLevel;
+    const energyLevel = data.energyLevel ?? existing?.energyLevel ?? estimated.energyLevel;
+
+    const { score, level, recommendation } = this.calculateRecoveryScore({
+      sleepHours,
+      sleepQuality,
+      stressLevel,
+      steps,
+      hrv,
+      restingHR,
+      energyLevel,
+    });
+
+    const log = await this.prisma.recoveryLog.upsert({
+      where: { userId_date: { userId, date } },
+      update: {
+        sleepHours, sleepQuality, stressLevel, steps, hrv, restingHR, energyLevel,
+        overallScore: score, fatigueLevel: level,
+        notes: data.notes ?? existing?.notes ?? 'Synced from Apple Watch',
+      },
+      create: {
+        userId, date,
+        sleepHours, sleepQuality, stressLevel, steps, hrv, restingHR, energyLevel,
+        overallScore: score, fatigueLevel: level,
+        notes: data.notes ?? 'Synced from Apple Watch',
+      },
+    });
+
+    this.computeAndSaveSnapshot(userId).catch((e) => {
+      this.logger.warn(`Background snapshot recompute failed for ${userId}: ${(e as Error).message}`);
+    });
+
+    return { log, recommendation, score, level, source: 'healthkit', estimated };
+  }
+
   async getLatestRecovery(userId: string) {
     const log = await this.prisma.recoveryLog.findFirst({
       where: { userId },
