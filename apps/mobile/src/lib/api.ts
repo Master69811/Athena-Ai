@@ -40,3 +40,22 @@ export async function syncHealthKit(payload: HealthKitPayload) {
   const res = await api.post('/recovery/sync/healthkit', payload);
   return res.data?.data ?? res.data;
 }
+
+export interface Readiness {
+  hasData: boolean;
+  score: number;
+  adaptation: {
+    intensity: 'full' | 'moderate' | 'reduced' | 'rest';
+    setMultiplier: number;
+    rpeAdjustment: number;
+    titleIt: string;
+    detailIt: string;
+    color: 'green' | 'yellow' | 'orange' | 'red';
+  };
+  summary: string;
+}
+
+export async function getReadiness(): Promise<Readiness> {
+  const res = await api.get('/recovery/readiness');
+  return (res.data?.data ?? res.data) as Readiness;
+}

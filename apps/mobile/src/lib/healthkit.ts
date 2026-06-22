@@ -11,10 +11,23 @@ const PERMISSIONS: HealthKitPermissions = {
       AppleHealthKit.Constants.Permissions.HeartRateVariability,
       AppleHealthKit.Constants.Permissions.RestingHeartRate,
       AppleHealthKit.Constants.Permissions.StepCount,
+      AppleHealthKit.Constants.Permissions.HeartRate,
+      AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
+      AppleHealthKit.Constants.Permissions.AppleExerciseTime,
+      AppleHealthKit.Constants.Permissions.ActivitySummary,
     ],
     write: [],
   },
 };
+
+export interface ActivityRings {
+  move: number;
+  moveGoal: number;
+  exercise: number;
+  exerciseGoal: number;
+  stand: number;
+  standGoal: number;
+}
 
 /** Ask the user for Health permissions. Resolves once the dialog is handled. */
 export function initHealthKit(): Promise<void> {
@@ -110,6 +123,40 @@ function getSteps(): Promise<number | undefined> {
       if (err || !result) return resolve(undefined);
       resolve(result.value != null ? Math.round(result.value) : undefined);
     });
+  });
+}
+
+/** Apple activity rings (Move / Exercise / Stand) for today. */
+export function getActivityRings(): Promise<ActivityRings | undefined> {
+  const options = { startDate: startOfToday().toISOString(), endDate: new Date().toISOString() };
+  return new Promise((resolve) => {
+    AppleHealthKit.getActivitySummary(options as any, (err: string, results: any[]) => {
+      if (err || !Array.isArray(results) || results.length === 0) return resolve(undefined);
+      const s = results[results.length - 1];
+      resolve({
+        move: Math.round(s.activeEnergyBurned ?? 0),
+        moveGoal: Math.round(s.activeEnergyBurnedGoal ?? 0),
+        exercise: Math.round(s.appleExerciseTime ?? 0),
+        exerciseGoal: Math.round(s.appleExerciseTimeGoal ?? 0),
+        stand: Math.round(s.appleStandHours ?? 0),
+        standGoal: Math.round(s.appleStandHoursGoal ?? 0),
+      });
+    });
+  });
+}
+
+/** Most recent heart-rate sample (bpm). */
+export function getLatestHeartRate(): Promise<number | undefined> {
+  const startDate = new Date();
+  startDate.setHours(startDate.getHours() - 3);
+  return new Promise((resolve) => {
+    AppleHealthKit.getHeartRateSamples(
+      { startDate: startDate.toISOString(), endDate: new Date().toISOString(), limit: 1, ascending: false } as any,
+      (err: string, samples: HealthValue[]) => {
+        if (err || !Array.isArray(samples) || samples.length === 0) return resolve(undefined);
+        resolve(Math.round(samples[0].value));
+      },
+    );
   });
 }
 

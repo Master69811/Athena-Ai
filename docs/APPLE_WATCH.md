@@ -115,6 +115,26 @@ eas submit --platform ios
 
 ---
 
+## Cosa fa l'app (funzioni)
+
+- **Sync automatico** sonno / HRV / FC a riposo / passi dall'Apple Watch
+- **Anelli attività** (Movimento / Esercizio / In piedi) come su Apple Fitness
+- **Prontezza di oggi**: l'app mostra il consiglio di allenamento basato sul recupero
+  (allenati come previsto / volume ridotto / deload) — calcolato dal backend
+- **Notifica giornaliera**: dopo il sync ricevi una notifica col verdetto del giorno
+- **Allenamento adattato**: sul sito, sessione live e dashboard usano lo stesso
+  segnale per ridurre automaticamente volume e RPE quando il recupero è basso
+
+## Funzioni future (richiedono un'app watchOS dedicata)
+
+Queste non sono incluse perché Expo non supporta app watchOS native: servono un
+modulo Swift/watchOS a parte.
+- ❤️ Frequenza cardiaca **in tempo reale durante l'allenamento** (zone cardio live)
+- ⌚ **Avvio/logging dell'allenamento dal polso** senza toccare il telefono
+
+L'app legge comunque l'ultima frequenza cardiaca disponibile da HealthKit
+(`getLatestHeartRate`), con il ritardo tipico di HealthKit (qualche secondo).
+
 ## Note tecniche / limiti
 - Il sync in background su iOS non ha un orario garantito: iOS decide quando eseguirlo
   (di solito quando carichi il telefono di notte). Il pulsante "Sincronizza ora" è sempre disponibile.

@@ -1,8 +1,9 @@
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as TaskManager from 'expo-task-manager';
 import { readTodayHealth } from './healthkit';
-import { syncHealthKit } from './api';
+import { syncHealthKit, getReadiness } from './api';
 import { getToken } from './auth';
+import { notifyReadiness } from './notifications';
 
 export const HEALTH_SYNC_TASK = 'athena-health-sync';
 
@@ -14,6 +15,14 @@ TaskManager.defineTask(HEALTH_SYNC_TASK, async () => {
 
     const payload = await readTodayHealth();
     await syncHealthKit(payload);
+
+    // Notify the user of today's recovery-based training adaptation.
+    try {
+      const readiness = await getReadiness();
+      await notifyReadiness(readiness);
+    } catch {
+      /* notification is best-effort */
+    }
     return BackgroundFetch.BackgroundFetchResult.NewData;
   } catch {
     return BackgroundFetch.BackgroundFetchResult.Failed;
