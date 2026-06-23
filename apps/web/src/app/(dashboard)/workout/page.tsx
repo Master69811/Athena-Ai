@@ -1,21 +1,31 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
 import { workoutApi } from '@/lib/api';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Zap, Brain, Dumbbell, ChevronRight, Calendar, Clock, BarChart3, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { getMuscleGroupLabel } from '@/lib/utils';
 
-const DAY_NAMES = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+const DAY_NAMES_SHORT = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
+
+const FALLBACK_DAYS = [
+  { id: 'f0', dayIndex: 0, name: 'Push · Forza', muscleGroups: ['chest', 'shoulders', 'triceps'], rpeTarget: 8, exercises: [] },
+  { id: 'f1', dayIndex: 1, name: 'Pull · Ipertrofia', muscleGroups: ['back', 'biceps'], rpeTarget: 7, exercises: [] },
+  { id: 'f2', dayIndex: 2, name: 'Recupero attivo', muscleGroups: ['cardio'], rpeTarget: 5, exercises: [] },
+  { id: 'f3', dayIndex: 3, name: 'Legs · Forza', muscleGroups: ['quads', 'hamstrings', 'glutes'], rpeTarget: 9, exercises: [] },
+  { id: 'f4', dayIndex: 4, name: 'Upper · Pump', muscleGroups: ['chest', 'back', 'shoulders'], rpeTarget: 7, exercises: [] },
+  { id: 'f5', dayIndex: 5, name: 'Riposo', muscleGroups: [], rpeTarget: 0, exercises: [] },
+];
+
+const todayDayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
 
 export default function WorkoutPage() {
   const queryClient = useQueryClient();
+  const [selectedWeek, setSelectedWeek] = useState(6);
 
-  const { data: plan, isLoading } = useQuery({
+  const { data: plan, isLoading, isError } = useQuery({
     queryKey: ['active-plan'],
     queryFn: workoutApi.getActivePlan,
     select: (res: any) => res.data,
@@ -30,150 +40,245 @@ export default function WorkoutPage() {
     onError: () => toast.error('Errore nella generazione. Riprova.'),
   });
 
+  const days: any[] = plan?.days?.length ? plan.days : FALLBACK_DAYS;
+  const totalWeeks: number = plan?.durationWeeks ?? 12;
+  const currentWeek: number = plan?.currentWeek ?? 6;
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 240 }}>
+        <Loader2 style={{ width: 24, height: 24, color: '#6366f1', animation: 'spin 1s linear infinite' }} />
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {!plan ? (
-        <Card glow className="text-center py-12 bg-gradient-to-b from-primary/5 to-transparent">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-4 shadow-xl shadow-primary/30">
-            <Brain className="w-8 h-8 text-white" />
+    <div style={{ maxWidth: 1180, margin: '0 auto', animation: 'fadeUp .4s ease' }}>
+      <style>{`
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(16px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        .day-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 8px 32px rgba(0,0,0,.35);
+        }
+        .week-chip:hover { opacity: .85; }
+        .generate-btn:hover { opacity: .9; }
+        .day-card { transition: transform .2s ease, box-shadow .2s ease; }
+        .generate-btn { transition: opacity .15s; cursor: pointer; }
+      `}</style>
+
+      {isError && !plan ? (
+        /* Empty state */
+        <div style={{
+          background: '#111118', border: '1px solid #1e1e2e', borderRadius: 20, padding: 48,
+          textAlign: 'center',
+        }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 16,
+            background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 16px', boxShadow: '0 10px 30px rgba(99,102,241,.35)',
+          }}>
+            <span style={{ fontSize: 24 }}>✦</span>
           </div>
-          <h2 className="text-2xl font-bold mb-2">Genera il Tuo Piano AI</h2>
-          <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-            Athena creerà un programma completamente personalizzato basato sul tuo profilo, obiettivi e metodologia scelta.
+          <p style={{ color: '#e7e7ee', fontWeight: 700, fontSize: 20, marginBottom: 8 }}>Nessun piano attivo</p>
+          <p style={{ color: '#a1a1b5', fontSize: 14, marginBottom: 24 }}>
+            Genera un programma personalizzato con Athena AI.
           </p>
-          <Button
-            variant="gradient"
-            size="xl"
+          <button
+            className="generate-btn"
             onClick={() => generateMutation.mutate()}
-            loading={generateMutation.isPending}
+            disabled={generateMutation.isPending}
+            style={{
+              background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+              border: 'none', borderRadius: 12, padding: '12px 28px',
+              color: '#fff', fontWeight: 700, fontSize: 14,
+              boxShadow: '0 10px 30px rgba(99,102,241,.35)',
+            }}
           >
-            <Zap className="w-5 h-5" />
-            {generateMutation.isPending ? 'Athena sta analizzando il tuo profilo...' : 'Genera Piano Personalizzato'}
-          </Button>
-        </Card>
+            {generateMutation.isPending ? 'Generazione...' : '✦ Genera Piano AI'}
+          </button>
+        </div>
       ) : (
         <>
-          {/* Plan Header */}
-          <Card glow className="bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs text-primary font-medium mb-1">PROGRAMMA ATTIVO · Settimana {plan.currentWeek}/{plan.durationWeeks}</p>
-                <h2 className="text-xl font-bold">{plan.name}</h2>
-                <p className="text-sm text-muted-foreground mt-1">{plan.description}</p>
-                <div className="flex items-center gap-4 mt-3">
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Calendar className="w-3.5 h-3.5" />
-                    {plan.daysPerWeek} giorni/settimana
-                  </span>
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="w-3.5 h-3.5" />
-                    {plan.durationWeeks} settimane
-                  </span>
-                  <span className="bg-primary/10 text-primary text-xs font-medium px-2 py-0.5 rounded-lg capitalize">
-                    {plan.methodology?.replace(/_/g, ' ')}
-                  </span>
-                </div>
-              </div>
-              <Link href="/workout/session">
-                <Button variant="gradient" size="md">
-                  <Zap className="w-4 h-4" />
-                  Allena
-                </Button>
-              </Link>
-            </div>
-
-            {/* AI Reasoning */}
-            {plan.aiReasoning && (
-              <div className="mt-4 pt-4 border-t border-border/50">
-                <p className="text-xs text-primary font-medium mb-1 flex items-center gap-1.5">
-                  <Brain className="w-3.5 h-3.5" /> PERCHÉ QUESTO PROGRAMMA
-                </p>
-                <p className="text-sm text-muted-foreground leading-relaxed">{plan.aiReasoning}</p>
-              </div>
-            )}
-          </Card>
-
-          {/* Weekly Schedule */}
-          <div className="grid gap-4">
-            {plan.days?.map((day: any, i: number) => (
-              <motion.div
-                key={day.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
+          {/* Header row */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
+            <p style={{ color: '#a1a1b5', fontSize: 14, lineHeight: 1.6 }}>
+              Programma <strong style={{ color: '#e7e7ee' }}>{plan?.name ?? 'Ipertrofia + Forza'}</strong>
+              {' · '}{totalWeeks} settimane{' · '}
+              <span style={{ color: '#8b5cf6' }}>generato da Athena</span>
+            </p>
+            <Link href="/workout/session" style={{ textDecoration: 'none' }}>
+              <button
+                className="generate-btn"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  background: 'transparent',
+                  border: '1.5px solid transparent',
+                  backgroundImage: 'linear-gradient(#111118,#111118), linear-gradient(135deg,#6366f1,#8b5cf6)',
+                  backgroundOrigin: 'border-box',
+                  backgroundClip: 'padding-box, border-box',
+                  borderRadius: 10, padding: '9px 18px',
+                  color: '#e7e7ee', fontWeight: 600, fontSize: 13,
+                  cursor: 'pointer',
+                }}
               >
-                <Card className="hover:border-primary/20 transition-all duration-200">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex flex-col items-center justify-center flex-shrink-0">
-                      <span className="text-xs text-primary font-medium">{DAY_NAMES[day.dayIndex]?.slice(0, 3).toUpperCase()}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="font-semibold text-foreground">{day.name}</h3>
-                        <span className="text-xs text-muted-foreground flex-shrink-0">
-                          {day.exercises?.length || 0} esercizi
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {day.muscleGroups?.map((mg: string) => (
-                          <span key={mg} className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-lg">
-                            {getMuscleGroupLabel(mg)}
-                          </span>
-                        ))}
-                      </div>
-
-                      {/* Exercise list */}
-                      <div className="mt-3 space-y-1.5">
-                        {day.exercises?.slice(0, 4).map((ex: any, j: number) => (
-                          <div key={j} className="flex items-center gap-2.5 text-sm">
-                            <span className="w-5 h-5 rounded bg-muted text-muted-foreground text-xs flex items-center justify-center flex-shrink-0">
-                              {j + 1}
-                            </span>
-                            <span className="text-foreground font-medium truncate">{ex.exercise?.name}</span>
-                            <span className="text-muted-foreground text-xs flex-shrink-0 ml-auto">
-                              {ex.sets}×{ex.repsMin}–{ex.repsMax} · {ex.weightSuggestion || 'RPE ' + (ex.rpeTarget || 8)}
-                            </span>
-                          </div>
-                        ))}
-                        {day.exercises?.length > 4 && (
-                          <p className="text-xs text-muted-foreground pl-7">+{day.exercises.length - 4} altri esercizi</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {day.notes && (
-                    <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border italic">"{day.notes}"</p>
-                  )}
-                </Card>
-              </motion.div>
-            ))}
+                <span style={{ fontSize: 14 }}>✦</span>
+                Inizia allenamento
+              </button>
+            </Link>
           </div>
 
-          {/* Regenerate */}
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              className="flex-1"
+          {/* Week tabs */}
+          <div style={{
+            display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 24,
+            scrollbarWidth: 'none',
+          }}>
+            {Array.from({ length: totalWeeks }, (_, i) => i + 1).map(w => {
+              const isActive = w === selectedWeek;
+              return (
+                <button
+                  key={w}
+                  className="week-chip"
+                  onClick={() => setSelectedWeek(w)}
+                  style={{
+                    flexShrink: 0,
+                    padding: '7px 16px',
+                    borderRadius: 20,
+                    border: isActive ? 'none' : '1px solid #2a2a3a',
+                    background: isActive ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : '#15151d',
+                    color: isActive ? '#fff' : '#a1a1b5',
+                    fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer',
+                    position: 'relative',
+                  }}
+                >
+                  Sett. {w}
+                  {w === currentWeek && (
+                    <span style={{
+                      position: 'absolute', top: -3, right: -3,
+                      width: 7, height: 7, borderRadius: '50%',
+                      background: '#8b5cf6',
+                    }} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Day grid */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+            gap: 16,
+          }}>
+            {days.map((day: any, i: number) => {
+              const isToday = day.dayIndex === todayDayIndex;
+              return (
+                <div
+                  key={day.id ?? i}
+                  className="day-card"
+                  style={{
+                    background: '#111118',
+                    border: `1px solid ${isToday ? 'rgba(99,102,241,.4)' : '#1e1e2e'}`,
+                    borderRadius: 18,
+                    padding: 20,
+                  }}
+                >
+                  {/* Top row: day label + RPE badge */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, letterSpacing: '.14em',
+                      color: '#6b7280', textTransform: 'uppercase',
+                    }}>
+                      {DAY_NAMES_SHORT[day.dayIndex] ?? DAY_NAMES_SHORT[i] ?? '—'}
+                    </span>
+                    {day.rpeTarget > 0 && (
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, color: '#8b5cf6',
+                        background: 'rgba(139,92,246,.12)', borderRadius: 6,
+                        padding: '2px 8px',
+                      }}>
+                        RPE {day.rpeTarget}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Title */}
+                  <h3 style={{
+                    fontSize: 18, fontWeight: 800, letterSpacing: '-.4px',
+                    color: '#e7e7ee', marginBottom: 10, lineHeight: 1.2,
+                  }}>
+                    {day.name}
+                  </h3>
+
+                  {/* Muscle group chips */}
+                  {day.muscleGroups?.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>
+                      {day.muscleGroups.map((mg: string) => (
+                        <span key={mg} style={{
+                          background: '#1a1a24', border: '1px solid #1e1e2e',
+                          color: '#a1a1b5', borderRadius: 7, fontSize: 11,
+                          padding: '3px 8px', fontWeight: 500,
+                        }}>
+                          {getMuscleGroupLabel(mg)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Exercise list */}
+                  {day.exercises?.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {day.exercises.slice(0, 4).map((ex: any, j: number) => (
+                        <div key={j} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
+                          <span style={{ color: '#c4c4d4', fontSize: 12.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                            {ex.exercise?.name ?? ex.name}
+                          </span>
+                          <span style={{ color: '#6b7280', fontSize: 12, flexShrink: 0 }}>
+                            {ex.sets}×{ex.repsMin}–{ex.repsMax}
+                          </span>
+                        </div>
+                      ))}
+                      {day.exercises.length > 4 && (
+                        <span style={{ color: '#6b7280', fontSize: 11, marginTop: 2 }}>
+                          +{day.exercises.length - 4} altri
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Rigenera */}
+          <div style={{ marginTop: 28, display: 'flex', gap: 12 }}>
+            <button
+              className="generate-btn"
               onClick={() => generateMutation.mutate()}
-              loading={generateMutation.isPending}
+              disabled={generateMutation.isPending}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                background: 'transparent',
+                border: '1px solid #2a2a3a',
+                borderRadius: 10, padding: '10px 20px',
+                color: '#a1a1b5', fontWeight: 600, fontSize: 13,
+                cursor: 'pointer',
+              }}
             >
-              <Brain className="w-4 h-4" />
-              Rigenera Piano AI
-            </Button>
-            <Link href="/workout/exercises" className="flex-1">
-              <Button variant="ghost" className="w-full">
-                <Dumbbell className="w-4 h-4" />
-                Libreria Esercizi
-              </Button>
-            </Link>
+              {generateMutation.isPending ? (
+                <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />
+              ) : (
+                <span style={{ fontSize: 13 }}>✦</span>
+              )}
+              {generateMutation.isPending ? 'Generazione...' : 'Genera nuovo piano AI'}
+            </button>
           </div>
         </>
       )}

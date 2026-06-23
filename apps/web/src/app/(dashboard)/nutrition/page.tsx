@@ -3,33 +3,189 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { nutritionApi } from '@/lib/api';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
-import { Brain, Apple, Utensils, PlusCircle, Search, Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, Check, PlusCircle, Brain, Apple, Utensils } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 
+/* ─── constants ─────────────────────────────────────────── */
 const MEAL_TYPES = [
-  { value: 'BREAKFAST', label: 'Colazione' },
-  { value: 'LUNCH', label: 'Pranzo' },
-  { value: 'DINNER', label: 'Cena' },
-  { value: 'SNACK', label: 'Spuntino' },
+  { value: 'BREAKFAST', label: 'Colazione', emoji: '☀️' },
+  { value: 'LUNCH',     label: 'Pranzo',    emoji: '🥗' },
+  { value: 'DINNER',    label: 'Cena',      emoji: '🍽️' },
+  { value: 'SNACK',     label: 'Spuntino',  emoji: '🍎' },
 ];
-
 const MEAL_LABELS: Record<string, string> = {
   BREAKFAST: 'Colazione', LUNCH: 'Pranzo', DINNER: 'Cena', SNACK: 'Spuntino',
 };
+const MEAL_EMOJI: Record<string, string> = {
+  BREAKFAST: '☀️', LUNCH: '🥗', DINNER: '🍽️', SNACK: '🍎',
+};
 
-function NutritionSkeleton() {
+/* ─── keyframes injected once ───────────────────────────── */
+const STYLES = `
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes barGrow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+`;
+
+/* ─── sub-components ────────────────────────────────────── */
+function CapLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-pulse">
-      <div className="h-36 rounded-2xl bg-muted" />
-      <div className="h-52 rounded-2xl bg-muted" />
+    <p style={{
+      fontSize: 11, fontWeight: 700, letterSpacing: '.14em',
+      color: '#6b7280', textTransform: 'uppercase', marginBottom: 0,
+    }}>
+      {children}
+    </p>
+  );
+}
+
+interface DonutProps {
+  consumed: number;
+  target: number;
+}
+function CalorieDonut({ consumed, target }: DonutProps) {
+  const r = (190 - 15) / 2;           // 87.5
+  const circ = 2 * Math.PI * r;       // ≈ 549.8
+  const pct = target > 0 ? Math.min(1, consumed / target) : 0;
+  const remaining = Math.max(0, target - consumed);
+
+  return (
+    <div style={{ position: 'relative', width: 190, height: 190, margin: '0 auto' }}>
+      <svg
+        width={190}
+        height={190}
+        style={{ transform: 'rotate(-90deg)', display: 'block' }}
+      >
+        {/* track */}
+        <circle
+          cx={95} cy={95} r={r}
+          fill="none"
+          stroke="#1a1a24"
+          strokeWidth={15}
+        />
+        {/* fill */}
+        <circle
+          cx={95} cy={95} r={r}
+          fill="none"
+          stroke="url(#donutGrad)"
+          strokeWidth={15}
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={circ * (1 - pct)}
+          style={{ transition: 'stroke-dashoffset .9s cubic-bezier(.4,0,.2,1)' }}
+        />
+        <defs>
+          <linearGradient id="donutGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#6366f1" />
+            <stop offset="100%" stopColor="#8b5cf6" />
+          </linearGradient>
+        </defs>
+      </svg>
+      {/* centred text */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: 2,
+      }}>
+        <span style={{ fontSize: 38, fontWeight: 800, color: '#e7e7ee', lineHeight: 1 }}>
+          {Math.round(consumed)}
+        </span>
+        <span style={{ fontSize: 12, color: '#6b7280' }}>
+          di {Math.round(target)} kcal
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>
+          {Math.round(remaining)} rimanenti
+        </span>
+      </div>
     </div>
   );
 }
 
+interface MacroBarProps {
+  label: string;
+  consumed: number;
+  target: number;
+  unit: string;
+  gradient: string;
+}
+function MacroBar({ label, consumed, target, unit, gradient }: MacroBarProps) {
+  const pct = target > 0 ? Math.min(100, (consumed / target) * 100) : 0;
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+        <CapLabel>{label}</CapLabel>
+        <span style={{ fontSize: 12, color: '#a1a1b5', fontWeight: 600 }}>
+          {Math.round(consumed)} / {Math.round(target)} {unit}
+        </span>
+      </div>
+      <div style={{ height: 9, background: '#1a1a24', borderRadius: 6, overflow: 'hidden' }}>
+        <div
+          style={{
+            height: '100%',
+            width: `${pct}%`,
+            background: gradient,
+            borderRadius: 6,
+            transformOrigin: 'left',
+            animation: 'barGrow .9s cubic-bezier(.4,0,.2,1)',
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ─── empty / no-plan states ────────────────────────────── */
+function NoPlanState({ onGenerate, loading }: { onGenerate: () => void; loading: boolean }) {
+  return (
+    <div style={{
+      gridColumn: '1 / -1',
+      background: '#111118', border: '1px solid #1e1e2e',
+      borderRadius: 20, padding: 48,
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      gap: 16, textAlign: 'center',
+      animation: 'fadeUp .4s ease',
+    }}>
+      <div style={{
+        width: 64, height: 64, borderRadius: 18,
+        background: 'rgba(99,102,241,.12)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Apple size={32} color="#6366f1" />
+      </div>
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: '#e7e7ee', margin: 0 }}>
+        Genera il Tuo Piano Nutrizionale
+      </h2>
+      <p style={{ fontSize: 14, color: '#a1a1b5', maxWidth: 340, margin: 0 }}>
+        Athena calcola le tue calorie e macro basandosi su TDEE, obiettivo e stile di vita.
+      </p>
+      <button
+        onClick={onGenerate}
+        disabled={loading}
+        style={{
+          padding: '9px 15px', border: 'none', borderRadius: 11,
+          background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+          color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 8,
+          opacity: loading ? .6 : 1,
+        }}
+      >
+        <Brain size={16} />
+        {loading ? 'Generazione…' : 'Genera Piano AI'}
+      </button>
+    </div>
+  );
+}
+
+/* ─── page ──────────────────────────────────────────────── */
 export default function NutritionPage() {
   const queryClient = useQueryClient();
   const today = new Date().toISOString().split('T')[0];
@@ -94,163 +250,259 @@ export default function NutritionPage() {
 
   const submitMeal = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFood) {
-      toast.error('Seleziona un alimento');
-      return;
-    }
+    if (!selectedFood) { toast.error('Seleziona un alimento'); return; }
     const s = parseFloat(servings);
-    if (!s || s <= 0) {
-      toast.error('Inserisci un numero di porzioni valido');
-      return;
-    }
-    logMutation.mutate({
-      date: today,
-      mealType,
-      foodItemId: selectedFood.id,
-      servings: s,
-    });
+    if (!s || s <= 0) { toast.error('Inserisci un numero di porzioni valido'); return; }
+    logMutation.mutate({ date: today, mealType, foodItemId: selectedFood.id, servings: s });
   };
 
-  if (planLoading) return <NutritionSkeleton />;
+  /* derived */
+  const macros   = dailyLog?.totals;
+  const calories = macros?.calories;
+  const protein  = macros?.protein;
+  const carbs    = macros?.carbs;
+  const fat      = macros?.fat;
 
-  const macros = dailyLog?.totals;
+  const consumed = calories?.consumed ?? 0;
+  const target   = calories?.target  ?? (plan?.dailyCalories ?? 2000);
 
+  /* ── render ─────────────────────────────────────────── */
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {!plan ? (
-        <Card glow className="text-center py-12 px-6">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-            <Apple className="w-8 h-8 text-primary" />
+    <>
+      <style>{STYLES}</style>
+
+      <div style={{ maxWidth: 1180, animation: 'fadeUp .4s ease' }}>
+        {planLoading ? (
+          /* skeleton */
+          <div style={{
+            display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20,
+          }}>
+            {[0, 1].map(i => (
+              <div key={i} style={{
+                background: '#111118', border: '1px solid #1e1e2e',
+                borderRadius: 20, padding: 24, height: 320,
+                opacity: .5,
+              }} />
+            ))}
           </div>
-          <h2 className="text-xl font-bold mb-2">Genera il Tuo Piano Nutrizionale</h2>
-          <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-            Athena calcola le tue calorie e macro basandosi su TDEE, obiettivo e stile di vita.
-          </p>
-          <Button variant="gradient" onClick={() => generateMutation.mutate()} loading={generateMutation.isPending}>
-            <Brain className="w-4 h-4" />
-            Genera Piano AI
-          </Button>
-        </Card>
-      ) : (
-        <>
-          {/* Piano attivo — macros grid responsive */}
-          <Card glow className="bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
-            <p className="text-xs text-primary font-medium mb-3">PIANO ATTIVO · {plan.goalType?.replace(/_/g, ' ')}</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {[
-                { label: 'Calorie', value: Math.round(plan.dailyCalories), unit: 'kcal', color: '#6366f1' },
-                { label: 'Proteine',    value: Math.round(plan.proteinG),   unit: 'g',    color: '#8b5cf6' },
-                { label: 'Carboidrati', value: Math.round(plan.carbsG),     unit: 'g',    color: '#06b6d4' },
-                { label: 'Grassi',      value: Math.round(plan.fatG),       unit: 'g',    color: '#10b981' },
-              ].map(m => (
-                <div key={m.label} className="text-center py-1">
-                  <p className="text-xl sm:text-2xl font-bold tabular-nums" style={{ color: m.color }}>{m.value}</p>
-                  <p className="text-xs text-muted-foreground">{m.unit}</p>
-                  <p className="text-xs font-medium mt-0.5">{m.label}</p>
+        ) : !plan ? (
+          <NoPlanState onGenerate={() => generateMutation.mutate()} loading={generateMutation.isPending} />
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20 }}>
+
+            {/* ── LEFT COLUMN ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+              {/* Obiettivo calorico */}
+              <div style={{
+                background: '#111118',
+                border: '1px solid rgba(99,102,241,.18)',
+                boxShadow: '0 0 45px rgba(99,102,241,.1)',
+                borderRadius: 20,
+                padding: 24,
+                textAlign: 'center',
+              }}>
+                <CapLabel>Obiettivo Calorico</CapLabel>
+                <div style={{ marginTop: 18, marginBottom: 14 }}>
+                  <CalorieDonut consumed={consumed} target={target} />
                 </div>
-              ))}
-            </div>
-            {plan.aiReasoning && (
-              <div className="mt-4 pt-4 border-t border-border/50">
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1">
-                  <Brain className="w-3.5 h-3.5 text-primary" /> REASONING AI
+                <p style={{ fontSize: 13, color: '#a1a1b5', margin: '8px 0 0' }}>
+                  Obiettivo: <strong style={{ color: '#e7e7ee' }}>{Math.round(target)} kcal</strong>
                 </p>
-                <p className="text-sm text-muted-foreground">{plan.aiReasoning}</p>
+                {!macros && (
+                  <p style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
+                    Nessun pasto registrato oggi
+                  </p>
+                )}
               </div>
-            )}
-          </Card>
 
-          {/* Log giornaliero */}
-          {macros ? (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Oggi — {today}</CardTitle>
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setMealModalOpen(true)}>
-                    <PlusCircle className="w-4 h-4" />
-                    Aggiungi pasto
-                  </Button>
+              {/* Macro */}
+              <div style={{
+                background: '#111118',
+                border: '1px solid #1e1e2e',
+                borderRadius: 20,
+                padding: 24,
+              }}>
+                <CapLabel>Macronutrienti</CapLabel>
+                <div style={{ marginTop: 18 }}>
+                  <MacroBar
+                    label="Proteine"
+                    consumed={protein?.consumed ?? 0}
+                    target={protein?.target ?? plan?.proteinG ?? 150}
+                    unit="g"
+                    gradient="linear-gradient(90deg,#6366f1,#8b5cf6)"
+                  />
+                  <MacroBar
+                    label="Carboidrati"
+                    consumed={carbs?.consumed ?? 0}
+                    target={carbs?.target ?? plan?.carbsG ?? 250}
+                    unit="g"
+                    gradient="linear-gradient(90deg,#22c55e,#4ade80)"
+                  />
+                  <MacroBar
+                    label="Grassi"
+                    consumed={fat?.consumed ?? 0}
+                    target={fat?.target ?? plan?.fatG ?? 70}
+                    unit="g"
+                    gradient="linear-gradient(90deg,#f59e0b,#fbbf24)"
+                  />
                 </div>
-              </CardHeader>
-              <div className="space-y-4">
-                {[
-                  { label: 'Calorie',     consumed: macros.calories.consumed, target: macros.calories.target, unit: 'kcal', color: '#6366f1' },
-                  { label: 'Proteine',    consumed: macros.protein.consumed,  target: macros.protein.target,  unit: 'g',    color: '#8b5cf6' },
-                  { label: 'Carboidrati', consumed: macros.carbs.consumed,    target: macros.carbs.target,    unit: 'g',    color: '#06b6d4' },
-                  { label: 'Grassi',      consumed: macros.fat.consumed,      target: macros.fat.target,      unit: 'g',    color: '#10b981' },
-                ].map(m => (
-                  <div key={m.label}>
-                    <div className="flex items-center justify-between text-sm mb-1.5">
-                      <span className="font-medium">{m.label}</span>
-                      <span className="text-muted-foreground tabular-nums">
-                        {Math.round(m.consumed)} / {Math.round(m.target)} {m.unit}
-                      </span>
-                    </div>
-                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${Math.min(100, (m.consumed / m.target) * 100)}%` }}
-                        transition={{ duration: 0.8, ease: 'easeOut' }}
-                        className="h-full rounded-full"
-                        style={{ background: m.color }}
-                      />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground text-right mt-0.5 tabular-nums">
-                      {m.target > 0 ? Math.round((m.consumed / m.target) * 100) : 0}%
-                    </p>
-                  </div>
-                ))}
+
+                {/* Aggiorna piano */}
+                <button
+                  onClick={() => generateMutation.mutate()}
+                  disabled={generateMutation.isPending}
+                  style={{
+                    marginTop: 16,
+                    width: '100%',
+                    padding: '9px 15px',
+                    border: '1px solid #2a2a3a',
+                    borderRadius: 11,
+                    background: '#1a1a24',
+                    color: '#a1a1b5',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                  }}
+                >
+                  <Brain size={14} />
+                  {generateMutation.isPending ? 'Aggiornamento…' : 'Aggiorna Piano AI'}
+                </button>
+              </div>
+            </div>
+
+            {/* ── RIGHT COLUMN ── */}
+            <div style={{
+              background: '#111118',
+              border: '1px solid #1e1e2e',
+              borderRadius: 20,
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+            }}>
+              {/* header */}
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                justifyContent: 'space-between', marginBottom: 20,
+              }}>
+                <CapLabel>Pasti di oggi</CapLabel>
+                <button
+                  onClick={() => setMealModalOpen(true)}
+                  style={{
+                    padding: '9px 15px', border: 'none', borderRadius: 11,
+                    background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                    color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 7,
+                  }}
+                >
+                  <PlusCircle size={14} />
+                  Aggiungi pasto
+                </button>
               </div>
 
-              {/* Pasti registrati oggi */}
-              {Array.isArray(dailyLog?.logs) && dailyLog.logs.length > 0 && (
-                <div className="mt-5 pt-5 border-t border-border/50">
-                  <p className="text-xs font-semibold text-muted-foreground mb-3">PASTI DI OGGI</p>
-                  <div className="space-y-2">
-                    {dailyLog.logs.map((log: any) => (
-                      <div key={log.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/40">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{log.foodItem?.name ?? 'Alimento'}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {MEAL_LABELS[log.mealType] ?? log.mealType} · {log.servings} {log.servings === 1 ? 'porzione' : 'porzioni'}
+              {/* meal list */}
+              {Array.isArray(dailyLog?.logs) && dailyLog.logs.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {dailyLog.logs.map((log: any) => {
+                    const kcal = Math.round((log.foodItem?.calories ?? 0) * log.servings);
+                    const type = log.mealType as string;
+                    const loggedAt = log.createdAt
+                      ? new Date(log.createdAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+                      : '';
+                    return (
+                      <div
+                        key={log.id}
+                        style={{
+                          background: '#15151d',
+                          border: '1px solid #1e1e2e',
+                          borderRadius: 14,
+                          padding: 15,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 15,
+                        }}
+                      >
+                        {/* icon tile */}
+                        <div style={{
+                          width: 44, height: 44, borderRadius: 11,
+                          background: '#1a1a24',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 20, flexShrink: 0,
+                        }}>
+                          {MEAL_EMOJI[type] ?? '🍽️'}
+                        </div>
+                        {/* name + meta */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{
+                            fontSize: 14, fontWeight: 600, color: '#e7e7ee',
+                            margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          }}>
+                            {log.foodItem?.name ?? 'Alimento'}
+                          </p>
+                          <p style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 0' }}>
+                            {MEAL_LABELS[type] ?? type}
+                            {loggedAt ? ` · ${loggedAt}` : ''}
+                            {` · P ${Math.round((log.foodItem?.proteinG ?? 0) * log.servings)}g`}
+                            {` C ${Math.round((log.foodItem?.carbsG ?? 0) * log.servings)}g`}
+                            {` G ${Math.round((log.foodItem?.fatG ?? 0) * log.servings)}g`}
                           </p>
                         </div>
-                        <span className="text-sm font-semibold tabular-nums text-muted-foreground flex-shrink-0 ml-3">
-                          {Math.round((log.foodItem?.calories ?? 0) * log.servings)} kcal
-                        </span>
+                        {/* kcal */}
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <span style={{ fontSize: 15, fontWeight: 700, color: '#e7e7ee' }}>
+                            {kcal}
+                          </span>
+                          <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 3 }}>kcal</span>
+                        </div>
                       </div>
-                    ))}
+                    );
+                  })}
+                </div>
+              ) : (
+                /* empty state */
+                <div style={{
+                  flex: 1,
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  gap: 12, textAlign: 'center',
+                }}>
+                  <div style={{
+                    width: 56, height: 56, borderRadius: 16,
+                    background: '#1a1a24',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Utensils size={24} color="#6b7280" />
                   </div>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: '#e7e7ee', margin: 0 }}>
+                    Nessun pasto registrato oggi
+                  </p>
+                  <p style={{ fontSize: 13, color: '#6b7280', maxWidth: 280, margin: 0 }}>
+                    Inizia a tracciare i tuoi pasti per vedere il progresso verso i tuoi obiettivi.
+                  </p>
+                  <button
+                    onClick={() => setMealModalOpen(true)}
+                    style={{
+                      padding: '9px 15px', border: 'none', borderRadius: 11,
+                      background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                      color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 8, marginTop: 4,
+                    }}
+                  >
+                    <PlusCircle size={14} />
+                    Aggiungi pasto
+                  </button>
                 </div>
               )}
-            </Card>
-          ) : (
-            /* Empty state: piano presente, nessun pasto registrato oggi */
-            <Card>
-              <div className="flex flex-col items-center justify-center py-10 gap-3 text-center px-6">
-                <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
-                  <Utensils className="w-7 h-7 text-muted-foreground" />
-                </div>
-                <p className="font-semibold">Nessun pasto registrato oggi</p>
-                <p className="text-sm text-muted-foreground max-w-xs">
-                  Inizia a tracciare i tuoi pasti per vedere il progresso verso i tuoi obiettivi.
-                </p>
-                <Button variant="outline" size="sm" className="mt-1 gap-2" onClick={() => setMealModalOpen(true)}>
-                  <PlusCircle className="w-4 h-4" />
-                  Aggiungi pasto
-                </Button>
-              </div>
-            </Card>
-          )}
+            </div>
+          </div>
+        )}
+      </div>
 
-          <Button variant="outline" className="w-full" onClick={() => generateMutation.mutate()} loading={generateMutation.isPending}>
-            <Brain className="w-4 h-4" />
-            Aggiorna Piano AI
-          </Button>
-        </>
-      )}
-
-      {/* Meal log modal */}
+      {/* ── Add meal modal ── */}
       <Modal
         open={mealModalOpen}
         onClose={closeMealModal}
@@ -268,7 +520,9 @@ export default function NutritionPage() {
                   type="button"
                   onClick={() => setMealType(t.value)}
                   className={`py-2 px-1 rounded-xl text-xs font-medium transition-colors touch-manipulation ${
-                    mealType === t.value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                    mealType === t.value
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/70'
                   }`}
                 >
                   {t.label}
@@ -291,7 +545,6 @@ export default function NutritionPage() {
               />
             </div>
 
-            {/* Results */}
             {debounced.length >= 2 && !selectedFood && (
               <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-border divide-y divide-border">
                 {searching ? (
@@ -305,9 +558,12 @@ export default function NutritionPage() {
                       className="w-full text-left p-3 hover:bg-muted transition-colors flex items-center justify-between"
                     >
                       <span className="text-sm font-medium">
-                        {f.name}{f.brand ? <span className="text-muted-foreground"> · {f.brand}</span> : null}
+                        {f.name}
+                        {f.brand ? <span className="text-muted-foreground"> · {f.brand}</span> : null}
                       </span>
-                      <span className="text-xs text-muted-foreground tabular-nums">{Math.round(f.calories)} kcal</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {Math.round(f.calories)} kcal
+                      </span>
                     </button>
                   ))
                 ) : (
@@ -316,7 +572,6 @@ export default function NutritionPage() {
               </div>
             )}
 
-            {/* Selected food */}
             {selectedFood && (
               <div className="mt-2 p-3 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-between">
                 <div>
@@ -324,7 +579,8 @@ export default function NutritionPage() {
                     <Check className="w-4 h-4 text-primary" /> {selectedFood.name}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {Math.round(selectedFood.calories)} kcal · P {Math.round(selectedFood.proteinG)}g · C {Math.round(selectedFood.carbsG)}g · G {Math.round(selectedFood.fatG)}g
+                    {Math.round(selectedFood.calories)} kcal · P {Math.round(selectedFood.proteinG)}g
+                    {' '}· C {Math.round(selectedFood.carbsG)}g · G {Math.round(selectedFood.fatG)}g
                     {' '}/ {selectedFood.servingSize}{selectedFood.servingUnit}
                   </p>
                 </div>
@@ -353,12 +609,18 @@ export default function NutritionPage() {
             <Button type="button" variant="outline" className="flex-1" onClick={closeMealModal}>
               Annulla
             </Button>
-            <Button type="submit" variant="gradient" className="flex-1" loading={logMutation.isPending} disabled={!selectedFood}>
+            <Button
+              type="submit"
+              variant="gradient"
+              className="flex-1"
+              loading={logMutation.isPending}
+              disabled={!selectedFood}
+            >
               Registra
             </Button>
           </div>
         </form>
       </Modal>
-    </div>
+    </>
   );
 }

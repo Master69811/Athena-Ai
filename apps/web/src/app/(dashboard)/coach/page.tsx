@@ -2,12 +2,37 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
 import { coachApi } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Send, Brain, User, Sparkles, ChevronRight, Loader2, Plus } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Plus } from 'lucide-react';
+
+/* ─── Keyframes ─── */
+const KEYFRAMES = `
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes logoPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,.45); }
+    50%       { box-shadow: 0 0 0 8px rgba(99,102,241,0); }
+  }
+  @keyframes blink {
+    0%, 80%, 100% { transform: scale(0.6); opacity: .4; }
+    40%            { transform: scale(1);   opacity: 1; }
+  }
+`;
+
+const SUGGESTIONS_FALLBACK = [
+  'Perché il mio recovery è basso?',
+  'Quanta proteina mi serve oggi?',
+  'Cambia la panca con i manubri',
+];
+
+const SendIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13" />
+    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+  </svg>
+);
 
 export default function CoachPage() {
   const [message, setMessage] = useState('');
@@ -21,7 +46,7 @@ export default function CoachPage() {
   const { data: suggestions } = useQuery({
     queryKey: ['ai-suggestions'],
     queryFn: coachApi.getSuggestions,
-    select: (res: any) => res.data as string[],
+    select: (res: any) => (Array.isArray(res?.data) ? res.data : null) as string[] | null,
   });
 
   const chatMutation = useMutation({
@@ -43,9 +68,10 @@ export default function CoachPage() {
   const sendMessage = (text?: string) => {
     const content = text || message.trim();
     if (!content) return;
-
     setMessages(prev => [...prev, { role: 'USER', content, createdAt: new Date() }]);
     setMessage('');
+    // Reset textarea height
+    if (inputRef.current) inputRef.current.style.height = 'auto';
     chatMutation.mutate({ message: content, conversationId });
   };
 
@@ -56,130 +82,270 @@ export default function CoachPage() {
     }
   };
 
-  return (
-    <div className="max-w-2xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
-      
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30">
-          <Brain className="w-5 h-5 text-white" />
-        </div>
-        <div>
-          <h2 className="font-bold text-foreground">Athena — AI Coach</h2>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
-            <span className="text-xs text-muted-foreground">Online · Pronto ad aiutarti</span>
-          </div>
-        </div>
-        <button
-          onClick={() => { setConversationId(undefined); setMessages([]); }}
-          className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Nuova chat
-        </button>
-      </div>
+  const activeSuggestions = (suggestions ?? []).length > 0 ? suggestions! : SUGGESTIONS_FALLBACK;
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 pb-4 no-scrollbar">
-        
-        {messages.length === 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-8">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-4 shadow-xl shadow-primary/30">
-              <Sparkles className="w-8 h-8 text-white" />
+  return (
+    <>
+      <style>{KEYFRAMES}</style>
+
+      <div style={{
+        maxWidth: 820,
+        margin: '0 auto',
+        height: 'calc(100vh - 68px - 64px)',
+        display: 'flex',
+        flexDirection: 'column',
+        animation: 'fadeUp .4s ease',
+      }}>
+
+        {/* ── Presence header ── */}
+        <div style={{
+          flexShrink: 0,
+          padding: '14px 18px',
+          background: '#111118',
+          border: '1px solid rgba(99,102,241,.2)',
+          borderRadius: 16,
+          boxShadow: '0 0 40px rgba(99,102,241,.08)',
+          marginBottom: 8,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}>
+          {/* Avatar */}
+          <div style={{
+            width: 40, height: 40, borderRadius: 11,
+            background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 17, fontWeight: 800, color: '#fff',
+            animation: 'logoPulse 2.4s ease infinite',
+            flexShrink: 0,
+          }}>A</div>
+
+          {/* Name + status */}
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#e7e7ee', lineHeight: 1.2 }}>Athena</div>
+            <div style={{ fontSize: 12, color: '#22c55e', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: '#22c55e' }} />
+              Online · conosce tutto il tuo profilo
             </div>
-            <h3 className="font-bold text-lg mb-2">Ciao! Sono Athena</h3>
-            <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
-              Il tuo coach AI di élite. Chiedimi qualsiasi cosa su allenamento, nutrizione, recupero o tecnica.
-            </p>
-            {suggestions && suggestions.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground font-medium">DOMANDE FREQUENTI</p>
-                <div className="grid grid-cols-1 gap-2">
-                  {suggestions.map((s, i) => (
-                    <button
-                      key={i}
-                      onClick={() => sendMessage(s)}
-                      className="flex items-center gap-2 p-3 rounded-xl bg-muted/50 hover:bg-muted text-left text-sm text-foreground transition-colors group"
-                    >
-                      <span className="flex-1">{s}</span>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
-                    </button>
-                  ))}
+          </div>
+
+          {/* New chat */}
+          <button
+            onClick={() => { setConversationId(undefined); setMessages([]); }}
+            style={{
+              marginLeft: 'auto',
+              fontSize: 12,
+              color: '#a1a1b5',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            <Plus size={13} />
+            Nuova chat
+          </button>
+        </div>
+
+        {/* ── Chat area ── */}
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16,
+          padding: '8px 4px 20px',
+        }}>
+
+          {/* Empty state */}
+          {messages.length === 0 && (
+            <div style={{ textAlign: 'center', paddingTop: 48, animation: 'fadeUp .4s ease' }}>
+              <div style={{
+                width: 64, height: 64, borderRadius: 20,
+                background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 18px',
+                fontSize: 28,
+                boxShadow: '0 8px 32px rgba(99,102,241,.3)',
+              }}>✨</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#e7e7ee', marginBottom: 8 }}>Ciao! Sono Athena</div>
+              <div style={{ fontSize: 13, color: '#a1a1b5', maxWidth: 320, margin: '0 auto 28px', lineHeight: 1.6 }}>
+                Il tuo coach AI di élite. Chiedimi qualsiasi cosa su allenamento, nutrizione, recupero o tecnica.
+              </div>
+            </div>
+          )}
+
+          {/* Messages */}
+          {messages.map((msg, i) => {
+            const isUser = msg.role === 'USER';
+            return (
+              <div key={msg.id ?? `${msg.role}-${i}`} style={{
+                display: 'flex',
+                flexDirection: isUser ? 'row-reverse' : 'row',
+                alignItems: 'flex-end',
+                gap: 10,
+                animation: 'fadeUp .3s ease',
+              }}>
+                {/* Avatar */}
+                {!isUser && (
+                  <div style={{
+                    width: 30, height: 30, borderRadius: 9, flexShrink: 0,
+                    background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 13, fontWeight: 800, color: '#fff',
+                  }}>A</div>
+                )}
+
+                {/* Bubble */}
+                <div style={isUser ? {
+                  background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                  borderRadius: '16px 16px 4px 16px',
+                  padding: '13px 16px',
+                  fontSize: 14,
+                  lineHeight: 1.55,
+                  color: '#fff',
+                  maxWidth: '74%',
+                } : {
+                  background: '#15151d',
+                  border: '1px solid #1e1e2e',
+                  borderRadius: '16px 16px 16px 4px',
+                  padding: '13px 16px',
+                  fontSize: 14,
+                  lineHeight: 1.55,
+                  color: '#e7e7ee',
+                  maxWidth: '74%',
+                }}>
+                  {msg.content}
                 </div>
               </div>
-            )}
-          </motion.div>
-        )}
+            );
+          })}
 
-        <AnimatePresence>
-          {messages.map((msg, i) => (
-            <motion.div
-              key={msg.id ?? `${msg.role}-${i}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn('flex gap-3', msg.role === 'USER' ? 'flex-row-reverse' : 'flex-row')}
-            >
-              <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1', msg.role === 'USER' ? 'bg-primary' : 'bg-gradient-to-br from-primary to-accent')}>
-                {msg.role === 'USER' ? <User className="w-4 h-4 text-white" /> : <Brain className="w-4 h-4 text-white" />}
-              </div>
-              <div className={cn('max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed', msg.role === 'USER' ? 'bg-primary text-white rounded-tr-sm' : 'bg-surface-elevated text-foreground border border-border rounded-tl-sm')}>
-                {msg.content}
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {/* Typing indicator */}
-        {isTyping && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0">
-              <Brain className="w-4 h-4 text-white" />
-            </div>
-            <div className="bg-surface-elevated border border-border rounded-2xl rounded-tl-sm px-4 py-3">
-              <div className="flex gap-1">
-                {[0, 1, 2].map(i => (
-                  <motion.span
-                    key={i}
-                    className="w-2 h-2 bg-primary rounded-full"
-                    animate={{ y: [0, -6, 0] }}
-                    transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.15 }}
-                  />
+          {/* Typing indicator */}
+          {isTyping && (
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+              <div style={{
+                width: 30, height: 30, borderRadius: 9, flexShrink: 0,
+                background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, fontWeight: 800, color: '#fff',
+              }}>A</div>
+              <div style={{
+                background: '#15151d',
+                border: '1px solid #1e1e2e',
+                borderRadius: '16px 16px 16px 4px',
+                padding: '13px 16px',
+                display: 'flex', gap: 5, alignItems: 'center',
+              }}>
+                {[0, 1, 2].map(idx => (
+                  <span key={idx} style={{
+                    display: 'inline-block',
+                    width: 7, height: 7, borderRadius: '50%',
+                    background: '#6366f1',
+                    animation: `blink 1.2s ease infinite`,
+                    animationDelay: `${idx * 0.2}s`,
+                  }} />
                 ))}
               </div>
             </div>
-          </motion.div>
-        )}
+          )}
 
-        <div ref={bottomRef} />
-      </div>
+          <div ref={bottomRef} />
+        </div>
 
-      {/* Input */}
-      <div className="flex gap-3 pt-3 border-t border-border">
-        <textarea
-          ref={inputRef}
-          value={message}
-          onChange={e => setMessage(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Chiedi al tuo coach AI..."
-          rows={1}
-          className="flex-1 bg-surface border border-border rounded-2xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary resize-none transition-all duration-200 max-h-32"
-          style={{ minHeight: '48px' }}
-          onInput={e => {
-            const target = e.target as HTMLTextAreaElement;
-            target.style.height = 'auto';
-            target.style.height = Math.min(target.scrollHeight, 128) + 'px';
-          }}
-        />
-        <Button
-          variant="gradient"
-          size="icon"
-          onClick={() => sendMessage()}
-          disabled={!message.trim() || chatMutation.isPending}
-        >
-          <Send className="w-4 h-4" />
-        </Button>
+        {/* ── Footer ── */}
+        <div style={{ flexShrink: 0 }}>
+
+          {/* Suggestion chips — show only when no messages yet */}
+          {messages.length === 0 && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+              {activeSuggestions.slice(0, 3).map((s, i) => (
+                <button
+                  key={i}
+                  onClick={() => sendMessage(s)}
+                  style={{
+                    fontSize: 12.5,
+                    color: '#a1a1b5',
+                    background: '#15151d',
+                    border: '1px solid #1e1e2e',
+                    padding: '8px 13px',
+                    borderRadius: 10,
+                    cursor: 'pointer',
+                    transition: 'border-color .2s, color .2s',
+                    whiteSpace: 'nowrap',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.borderColor = '#6366f1';
+                    e.currentTarget.style.color = '#e7e7ee';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.borderColor = '#1e1e2e';
+                    e.currentTarget.style.color = '#a1a1b5';
+                  }}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Input row */}
+          <div style={{
+            background: '#111118',
+            border: '1px solid #1e1e2e',
+            borderRadius: 15,
+            padding: '8px 8px 8px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}>
+            <textarea
+              ref={inputRef}
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Chiedi ad Athena…"
+              rows={1}
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                resize: 'none',
+                fontSize: 14,
+                color: '#e7e7ee',
+                lineHeight: 1.5,
+                minHeight: 24,
+                maxHeight: 128,
+                padding: 0,
+              }}
+              onInput={e => {
+                const t = e.target as HTMLTextAreaElement;
+                t.style.height = 'auto';
+                t.style.height = Math.min(t.scrollHeight, 128) + 'px';
+              }}
+            />
+            <button
+              onClick={() => sendMessage()}
+              disabled={!message.trim() || chatMutation.isPending}
+              style={{
+                width: 40, height: 40, borderRadius: 11, flexShrink: 0,
+                background: message.trim() && !chatMutation.isPending
+                  ? 'linear-gradient(135deg,#6366f1,#8b5cf6)'
+                  : '#1a1a24',
+                border: 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: message.trim() && !chatMutation.isPending ? '#fff' : '#6b7280',
+                cursor: message.trim() && !chatMutation.isPending ? 'pointer' : 'default',
+                transition: 'background .2s, color .2s',
+              }}
+            >
+              <SendIcon />
+            </button>
+          </div>
+        </div>
+
       </div>
-    </div>
+    </>
   );
 }

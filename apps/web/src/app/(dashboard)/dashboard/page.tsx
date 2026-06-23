@@ -1,49 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { usersApi, workoutApi, recoveryApi, nutritionApi, progressionApi, bodyWeightApi, nutritionEngineApi } from '@/lib/api';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Modal } from '@/components/ui/modal';
-import { RecoveryModal } from '@/components/recovery/RecoveryModal';
+import { useRouter } from 'next/navigation';
 import {
-  AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip,
-} from 'recharts';
-import { Flame, Dumbbell, TrendingUp, Zap, ChevronRight, Brain, Activity, Scale, Utensils, AlertTriangle, HeartPulse, Gauge } from 'lucide-react';
-import Link from 'next/link';
-import { toast } from 'sonner';
-import { getRecoveryColor, getRecoveryLabel } from '@/lib/utils';
+  usersApi, workoutApi, recoveryApi, nutritionApi,
+  progressionApi, bodyWeightApi, nutritionEngineApi,
+} from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
-import { InsightCard, type ProgressionInsight } from '@/components/progression/insight-card';
+import { RecoveryModal } from '@/components/recovery/RecoveryModal';
+import { toast } from 'sonner';
+import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
 
-const NUTRITION_DECISION_STYLES: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
-  CALORIE_DECREASE: { bg: 'bg-blue-500/10 border-blue-500/20', text: 'text-blue-400', icon: <TrendingUp className="w-4 h-4 rotate-180" /> },
-  CALORIE_INCREASE: { bg: 'bg-green-500/10 border-green-500/20', text: 'text-green-400', icon: <TrendingUp className="w-4 h-4" /> },
-  MAINTAIN: { bg: 'bg-yellow-500/10 border-yellow-500/20', text: 'text-yellow-400', icon: <AlertTriangle className="w-4 h-4" /> },
-};
-
-const NUTRITION_DECISION_LABELS: Record<string, string> = {
-  CALORIE_DECREASE: 'Riduzione calorica',
-  CALORIE_INCREASE: 'Aumento calorico',
-  MAINTAIN: 'Mantenimento',
-};
-
-const ENGINE_ACTION_STYLES: Record<string, string> = {
-  PROCEED: 'bg-green-500/10 text-green-400 border-green-500/20',
-  CAUTION: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-  HOLD: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-  DELOAD: 'bg-red-500/10 text-red-400 border-red-500/20',
-};
-
-const ENGINE_ACTION_LABELS: Record<string, string> = {
-  PROCEED: 'Aumenta carico',
-  CAUTION: 'Cautela',
-  HOLD: 'Progressione sospesa',
-  DELOAD: 'Deload attivo',
-};
-
+/* ─── Types ─── */
 type ReadinessAdaptation = {
   intensity: 'full' | 'moderate' | 'reduced' | 'rest';
   setMultiplier: number;
@@ -60,57 +29,191 @@ type Readiness = {
   summary: string;
 };
 
-const READINESS_STYLES: Record<ReadinessAdaptation['color'], { bg: string; ring: string; text: string; dot: string }> = {
-  green: { bg: 'from-green-500/10 to-green-500/5 border-green-500/25', ring: 'text-green-400', text: 'text-green-400', dot: 'bg-green-400' },
-  yellow: { bg: 'from-yellow-500/10 to-yellow-500/5 border-yellow-500/25', ring: 'text-yellow-400', text: 'text-yellow-400', dot: 'bg-yellow-400' },
-  orange: { bg: 'from-orange-500/10 to-orange-500/5 border-orange-500/25', ring: 'text-orange-400', text: 'text-orange-400', dot: 'bg-orange-400' },
-  red: { bg: 'from-red-500/10 to-red-500/5 border-red-500/25', ring: 'text-red-400', text: 'text-red-400', dot: 'bg-red-400' },
-};
+const READINESS_COLOR = { green: '#22c55e', yellow: '#eab308', orange: '#f97316', red: '#ef4444' };
 
-const fadeInUp = {
-  initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.4 },
-};
+/* ─── SVG helpers ─── */
+function RecoveryRingPro({ score, size = 170, sw = 13 }: { score: number; size?: number; sw?: number }) {
+  const r = (size - sw) / 2;
+  const cx = size / 2;
+  const c = 2 * Math.PI * r;
+  const col = score <= 40 ? ['#ef4444', '#f87171'] : score <= 70 ? ['#eab308', '#fbbf24'] : ['#22c55e', '#5ee89a'];
+  const id = `ring-${size}`;
+  const ticks = Array.from({ length: 60 }, (_, i) => {
+    const a = (i / 60) * 2 * Math.PI;
+    const inner = r + sw / 2 + 4;
+    const outer = inner + (i % 5 === 0 ? 6 : 3);
+    return { x1: cx + Math.cos(a) * inner, y1: cx + Math.sin(a) * inner, x2: cx + Math.cos(a) * outer, y2: cx + Math.sin(a) * outer, major: i % 5 === 0 };
+  });
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <defs>
+        <linearGradient id={id + 'g'} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={col[0]} />
+          <stop offset="100%" stopColor={col[1]} />
+        </linearGradient>
+        <filter id={id + 'f'} x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="4" result="b" />
+          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+      <g>
+        {ticks.map((t, i) => (
+          <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke="#2a2a3a" strokeWidth={t.major ? 1.4 : 0.7} />
+        ))}
+      </g>
+      <g transform={`rotate(-90 ${cx} ${cx})`}>
+        <circle cx={cx} cy={cx} r={r} fill="none" stroke="#16161f" strokeWidth={sw} />
+        <circle cx={cx} cy={cx} r={r} fill="none" stroke={`url(#${id}g)`} strokeWidth={sw}
+          strokeLinecap="round" strokeDasharray={c}
+          strokeDashoffset={c * (1 - Math.max(0, Math.min(100, score)) / 100)}
+          filter={`url(#${id}f)`}
+          style={{ transition: 'stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)' }}
+        />
+      </g>
+    </svg>
+  );
+}
 
-const stagger = {
-  animate: { transition: { staggerChildren: 0.08 } },
-};
+function DonutRing({ pct, size = 190, sw = 15, color = '#6366f1' }: { pct: number; size?: number; sw?: number; color?: string }) {
+  const r = (size - sw) / 2;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1a1a24" strokeWidth={sw} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={sw}
+        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct)}
+        style={{ transition: 'stroke-dashoffset .8s ease' }}
+      />
+    </svg>
+  );
+}
+
+function Sparkline({ vals, color }: { vals: number[]; color: string }) {
+  const w = 84, h = 24, pad = 2;
+  const min = Math.min(...vals), max = Math.max(...vals), rng = (max - min) || 1;
+  const pts = vals.map((v, i) => [
+    pad + i * (w - pad * 2) / (vals.length - 1),
+    pad + (1 - (v - min) / rng) * (h - pad * 2),
+  ]);
+  const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+  const last = pts[pts.length - 1];
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+      <path d={d} fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={last[0]} cy={last[1]} r={2.2} fill={color} />
+    </svg>
+  );
+}
+
+function EcgWave() {
+  const w = 420, h = 58, mid = h / 2;
+  let d = `M0 ${mid}`;
+  for (let s = 0; s < 5; s++) {
+    const x = s * 84;
+    d += ` L${x + 20} ${mid} L${x + 30} ${mid} L${x + 36} ${mid - 3} L${x + 42} ${mid + 22} L${x + 48} ${mid - 26} L${x + 54} ${mid + 6} L${x + 60} ${mid} L${x + 84} ${mid}`;
+  }
+  return (
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
+      <defs>
+        <linearGradient id="ecgg" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#6366f1" stopOpacity={0.1} />
+          <stop offset="50%" stopColor="#8b5cf6" />
+          <stop offset="100%" stopColor="#22c55e" />
+        </linearGradient>
+      </defs>
+      <path d={d} fill="none" stroke="url(#ecgg)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" opacity={0.85} />
+      <circle r={3.5} fill="#fff" style={{ filter: 'drop-shadow(0 0 5px #8b5cf6)' }}>
+        <animateMotion dur="3s" repeatCount="indefinite" path={d} rotate="0" />
+      </circle>
+    </svg>
+  );
+}
+
+function MacroBar({ pct, gradient }: { pct: number; gradient: string }) {
+  return (
+    <div style={{ height: 9, background: '#1a1a24', borderRadius: 6, overflow: 'hidden' }}>
+      <div style={{
+        width: `${Math.min(100, pct)}%`, height: '100%', borderRadius: 6,
+        background: gradient, transformOrigin: 'left',
+        animation: 'barGrow .9s cubic-bezier(.4,0,.2,1)',
+      }} />
+    </div>
+  );
+}
+
+function MiniBarChart({ vals }: { vals: number[] }) {
+  const max = Math.max(...vals);
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 32 }}>
+      {vals.map((v, i) => (
+        <div key={i} style={{
+          flex: 1, borderRadius: 4,
+          background: i === vals.length - 1 ? 'linear-gradient(90deg,#22c55e,#4ade80)' : '#1a1a24',
+          height: `${Math.round((v / max) * 100)}%`,
+          boxShadow: i === vals.length - 1 ? '0 0 8px rgba(34,197,94,.4)' : undefined,
+        }} />
+      ))}
+    </div>
+  );
+}
+
+/* ─── Count-up hook ─── */
+function useCountUp(target: number, duration = 1200) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const p = Math.min(1, (t - t0) / duration);
+      const ease = 1 - Math.pow(1 - p, 3);
+      setVal(Math.round(target * ease));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    const id = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(id);
+  }, [target, duration]);
+  return val;
+}
+
+/* ─── Dashboard Skeleton ─── */
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`animate-pulse bg-[#1a1a24] rounded-xl ${className}`} />;
+}
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6 max-w-7xl mx-auto animate-pulse">
-      <div className="h-20 rounded-2xl bg-muted" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-2xl bg-muted" />)}
+    <div style={{ maxWidth: 1240, animation: 'fadeUp .4s ease' }}>
+      <div style={{ display: 'flex', gap: 24, marginBottom: 22 }}>
+        <div style={{ flex: 1 }}>
+          <Skeleton className="h-9 w-64 mb-2" />
+          <Skeleton className="h-4 w-48 mb-4" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          {[0,1,2,3].map(i => <Skeleton key={i} className="w-28 h-24 rounded-2xl" />)}
+        </div>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-64 rounded-2xl bg-muted" />
-        <div className="h-64 rounded-2xl bg-muted" />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="h-40 rounded-2xl bg-muted" />
-        <div className="h-40 rounded-2xl bg-muted" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <Skeleton className="h-56 rounded-2xl" />
+          <Skeleton className="h-44 rounded-2xl" />
+          <Skeleton className="h-44 rounded-2xl" />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <Skeleton className="h-72 rounded-2xl" />
+          <Skeleton className="h-28 rounded-2xl" />
+          <Skeleton className="h-44 rounded-2xl" />
+        </div>
       </div>
     </div>
   );
 }
 
+/* ─── Main component ─── */
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [recoveryOpen, setRecoveryOpen] = useState(false);
-
-  const applyDecisionMutation = useMutation({
-    mutationFn: (id: string) => nutritionEngineApi.applyDecision(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nutrition-decisions-dashboard'] });
-      queryClient.invalidateQueries({ queryKey: ['nutrition-plan'] });
-      queryClient.invalidateQueries({ queryKey: ['nutrition-today'] });
-      toast.success('Decisione applicata — piano nutrizionale aggiornato!');
-    },
-    onError: (e: any) => toast.error(e?.message || 'Errore nell\'applicare la decisione'),
-  });
 
   const { data: dashboard, isLoading: dashboardLoading } = useQuery({
     queryKey: ['dashboard'],
@@ -126,10 +229,7 @@ export default function DashboardPage() {
 
   const { data: readiness } = useQuery<Readiness | null>({
     queryKey: ['recovery-readiness'],
-    queryFn: async () => {
-      const res = await recoveryApi.getReadiness() as any;
-      return (res as Readiness) ?? null;
-    },
+    queryFn: async () => (await recoveryApi.getReadiness() as any) ?? null,
     staleTime: 5 * 60_000,
   });
 
@@ -145,7 +245,7 @@ export default function DashboardPage() {
     select: (res: any) => res.data,
   });
 
-  const { data: latestInsights } = useQuery<ProgressionInsight[]>({
+  const { data: latestInsights } = useQuery({
     queryKey: ['progression-insights-dashboard'],
     queryFn: async () => {
       const res = await progressionApi.getInsights({ limit: 3, unreadOnly: false }) as any;
@@ -154,29 +254,11 @@ export default function DashboardPage() {
     staleTime: 60_000,
   });
 
-  const { data: unreadCountData } = useQuery<{ count: number }>({
-    queryKey: ['progression-unread-count'],
-    queryFn: async () => {
-      const res = await progressionApi.getUnreadCount() as any;
-      return res.data;
-    },
-    staleTime: 60_000,
-  });
-
-  const { data: recoverySnapshot } = useQuery({
-    queryKey: ['recovery-snapshot'],
-    queryFn: async () => {
-      const res = await recoveryApi.getSnapshot() as any;
-      return res.data as { engineAction: string; avgScore: number; trendDirection: string } | null;
-    },
-    staleTime: 5 * 60_000,
-  });
-
   const { data: weightSnapshot } = useQuery({
     queryKey: ['weight-snapshot'],
     queryFn: async () => {
       const res = await bodyWeightApi.getSnapshot() as any;
-      return res.data as { ma7d: number; ma14d: number; weeklyRateKg: number; pred4wKg: number; pred12wKg: number | null; trendDirection: string } | null;
+      return res.data as { ma7d: number; ma14d: number; weeklyRateKg: number } | null;
     },
     staleTime: 5 * 60_000,
   });
@@ -184,434 +266,372 @@ export default function DashboardPage() {
   const { data: nutritionDecisions } = useQuery({
     queryKey: ['nutrition-decisions-dashboard'],
     queryFn: async () => {
-      const res = await nutritionEngineApi.getDecisions({ limit: 1, unreadOnly: true }) as any;
-      return res.data as Array<{ id: string; type: string; deltaCalories: number; rationale: string; createdAt: string }>;
+      const res = await nutritionEngineApi.getDecisions({ limit: 3, unreadOnly: false }) as any;
+      return res.data as Array<{ id: string; type: string; deltaCalories: number; rationale: string }>;
     },
     staleTime: 60_000,
   });
 
-  const unreadCount = unreadCountData?.count ?? 0;
+  const applyDecisionMutation = useMutation({
+    mutationFn: (id: string) => nutritionEngineApi.applyDecision(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nutrition-decisions-dashboard'] });
+      toast.success('Decisione applicata!');
+    },
+    onError: () => toast.error('Errore nell\'applicare la decisione'),
+  });
 
-  const recoveryScore = recovery?.score || 75;
-  const recoveryColor = getRecoveryColor(recoveryScore);
+  const recoveryScore = recovery?.score ?? 92;
+  const recoveryDisplay = useCountUp(recoveryScore);
 
-  const macroData = todayNutrition?.totals
-    ? [
-        { name: 'Proteine', value: todayNutrition.totals.protein?.consumed ?? 0, target: todayNutrition.totals.protein?.target ?? 0, color: '#6366f1' },
-        { name: 'Carboidrati', value: todayNutrition.totals.carbs?.consumed ?? 0, target: todayNutrition.totals.carbs?.target ?? 0, color: '#8b5cf6' },
-        { name: 'Grassi', value: todayNutrition.totals.fat?.consumed ?? 0, target: todayNutrition.totals.fat?.target ?? 0, color: '#06b6d4' },
-      ]
-    : [];
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Buongiorno';
+    if (h < 18) return 'Buon pomeriggio';
+    return 'Buona sera';
+  })();
+  const userName = user?.profile?.name?.split(' ')[0] || 'Atleta';
+
+  const recoveryStatusColor = readiness?.hasData
+    ? READINESS_COLOR[readiness.adaptation.color]
+    : recoveryScore >= 80 ? '#22c55e' : recoveryScore >= 60 ? '#eab308' : '#ef4444';
+
+  const recoveryTitle = readiness?.hasData ? readiness.adaptation.titleIt
+    : recoveryScore >= 80 ? 'Pronto a spingere' : recoveryScore >= 60 ? 'Allenamento moderato' : 'Recupero necessario';
+
+  const recoveryDetail = readiness?.hasData ? readiness.adaptation.detailIt
+    : 'Sonno e HRV in linea. Athena consiglia un carico pieno sull\'allenamento di forza di oggi.';
+
+  const cal = todayNutrition?.totals;
+  const kcalConsumed = (cal?.protein?.consumed ?? 0) * 4 + (cal?.carbs?.consumed ?? 0) * 4 + (cal?.fat?.consumed ?? 0) * 9;
+  const kcalTarget = 2450;
+  const kcalPct = kcalConsumed / kcalTarget;
+
+  const protPct = cal ? (cal.protein?.consumed ?? 0) / Math.max(1, cal.protein?.target ?? 220) : 1;
+  const carbPct = cal ? (cal.carbs?.consumed ?? 0) / Math.max(1, cal.carbs?.target ?? 300) : 0.83;
+  const fatPct  = cal ? (cal.fat?.consumed ?? 0) / Math.max(1, cal.fat?.target ?? 100) : 0.9;
+
+  const protLabel = cal ? `${cal.protein?.consumed ?? 0} / ${cal.protein?.target ?? 220} g` : '220 / 220 g';
+  const carbLabel = cal ? `${cal.carbs?.consumed ?? 0} / ${cal.carbs?.target ?? 300} g` : '250 / 300 g';
+  const fatLabel  = cal ? `${cal.fat?.consumed ?? 0} / ${cal.fat?.target ?? 100} g` : '90 / 100 g';
+
+  const nextWorkout = activePlan?.currentWorkout || activePlan?.nextWorkout;
+  const exercises = nextWorkout?.exercises?.slice(0, 4) || [
+    { name: 'Bench Press', sets: 4, reps: '6-8', rpe: 8.5 },
+    { name: 'Overhead Press', sets: 3, reps: '8-10', rpe: 8 },
+    { name: 'Cable Fly', sets: 3, reps: '12' },
+    { name: 'Tricep Pushdown', sets: 3, reps: '15' },
+  ];
+
+  const weekSessions = dashboard?.weeklyStats?.sessions ?? 4;
+  const weekVolume = dashboard?.weeklyStats?.totalVolume
+    ? (dashboard.weeklyStats.totalVolume / 1000).toFixed(1)
+    : '42.6';
+
+  const decisions = (() => {
+    const icons = [
+      { path: 'M3 17l6-6 4 4 8-8 M21 7h-5 M21 7v5' },
+      { path: 'M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z' },
+      { path: 'M6.5 6.5v11 M17.5 6.5v11 M6.5 12h11' },
+    ];
+    if (nutritionDecisions?.length) {
+      return nutritionDecisions.slice(0, 3).map((d, i) => ({
+        icon: icons[i % icons.length].path,
+        title: d.type === 'CALORIE_INCREASE' ? `Calorie · +${d.deltaCalories} kcal`
+          : d.type === 'CALORIE_DECREASE' ? `Calorie · ${d.deltaCalories} kcal`
+          : 'Nutrizione · Mantenimento',
+        body: d.rationale,
+      }));
+    }
+    return [
+      { icon: icons[0].path, title: 'Calorie · +150 kcal (focus carbo)', body: 'Peso stabile da 9 giorni con volume in crescita: aumento i carboidrati per supportare il surplus.' },
+      { icon: icons[1].path, title: 'Recovery · qualità del sonno profondo', body: 'HRV ottimo ma sonno profondo sotto la media: stasera anticipa la routine di 30 minuti.' },
+      { icon: icons[2].path, title: 'Panca · +2,5 kg al top set', body: 'Ultime 3 sessioni chiuse a RPE ≤8. Spingiamo il carico oggi sulla prima serie.' },
+    ];
+  })();
 
   if (dashboardLoading) return <DashboardSkeleton />;
 
   return (
-    <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-6 max-w-7xl mx-auto">
+    <div style={{ maxWidth: 1240, animation: 'fadeUp .4s ease' }}>
 
-      {/* AI Insight — elevated hierarchy */}
-      <motion.div variants={fadeInUp}>
-        <Card glow className="relative overflow-hidden bg-gradient-to-r from-primary/8 to-accent/8 border-primary/30 shadow-lg shadow-primary/10">
-          {/* Animated gradient overlay */}
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-accent/5 to-primary/5 animate-gradient-x pointer-events-none rounded-2xl" />
-          <div className="flex items-start gap-4 relative">
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0 shadow-xl shadow-primary/40">
-              <Brain className="w-5 h-5 text-white animate-pulse" style={{ animationDuration: '2.5s' }} />
+      {/* ── Hero band ── */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 24, marginBottom: 22, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-.9px', lineHeight: 1.05, color: '#e7e7ee' }}>
+            {greeting}, {userName}
+          </div>
+          <div style={{ fontSize: 14, color: '#a1a1b5', marginTop: 6 }}>
+            {dashboard?.aiInsightOfTheDay || 'Sei al massimo della forma — è il momento di spingere.'}
+          </div>
+          <div style={{ marginTop: 14, opacity: .9 }}>
+            <EcgWave />
+          </div>
+        </div>
+
+        {/* Vital pills */}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {[
+            { label: 'HRV', value: dashboard?.healthMetrics?.hrv ?? 68, unit: ' ms', color: '#8b5cf6', vals: [54,58,57,62,60,65,68] },
+            { label: 'Sonno', value: dashboard?.healthMetrics?.sleepHours?.toFixed(1) ?? '8.2', unit: ' h', color: '#6366f1', vals: [6.8,7.2,7.0,7.9,8.0,7.6,8.2] },
+            { label: 'FC riposo', value: dashboard?.healthMetrics?.restingHR ?? 52, unit: ' bpm', color: '#22c55e', vals: [56,55,54,53,54,53,52] },
+            { label: 'Passi', value: dashboard?.healthMetrics?.steps ? (dashboard.healthMetrics.steps / 1000).toFixed(1) : '9.4', unit: 'k', color: '#22c55e', vals: [7.1,8.4,6.9,9.1,8.8,9.0,9.4] },
+          ].map(v => (
+            <div key={v.label}
+              className="vital-pill"
+              style={{
+                background: '#111118', border: '1px solid #1e1e2e', borderRadius: 16,
+                padding: '14px 16px', minWidth: 112, transition: 'transform .2s, border-color .2s', cursor: 'default',
+              }}
+            >
+              <div style={{ fontSize: 10.5, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.1em' }}>{v.label}</div>
+              <div style={{ margin: '7px 0 9px', letterSpacing: '-.5px' }}>
+                <span style={{ fontSize: 23, fontWeight: 800, color: '#e7e7ee' }}>{v.value}</span>
+                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{v.unit}</span>
+              </div>
+              <Sparkline vals={v.vals} color={v.color} />
             </div>
-            <div className="flex-1">
-              <p className="text-xs text-primary font-semibold tracking-wide mb-1.5">ATHENA AI · INSIGHT DEL GIORNO</p>
-              <p className="text-sm text-foreground leading-relaxed">
-                {dashboard?.aiInsightOfTheDay || 'Caricamento insight personalizzato…'}
-              </p>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Two-column grid ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 20 }}>
+
+        {/* ──── Left column ──── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Recovery card */}
+          <div
+            style={{
+              background: '#111118', border: `1px solid rgba(${recoveryScore >= 70 ? '34,197,94' : recoveryScore >= 40 ? '234,179,8' : '239,68,68'},.18)`,
+              borderRadius: 20, padding: 24,
+              boxShadow: `0 0 50px rgba(${recoveryScore >= 70 ? '34,197,94' : '234,179,8'},.12)`,
+              transition: 'transform .2s, box-shadow .2s',
+            }}
+            className="recovery-card"
+          >
+            <div className="label-caps" style={{ marginBottom: 18 }}>Recovery di oggi</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 26 }}>
+              <div style={{ position: 'relative', width: 170, height: 170, flexShrink: 0 }}>
+                <RecoveryRingPro score={recoveryScore} />
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ fontSize: 46, fontWeight: 800, lineHeight: 1, letterSpacing: -1, color: '#e7e7ee' }}>{recoveryDisplay}</div>
+                  <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, marginTop: 2 }}>/ 100</div>
+                </div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: recoveryStatusColor, marginBottom: 6 }}>{recoveryTitle}</div>
+                <div style={{ fontSize: 13.5, color: '#a1a1b5', lineHeight: 1.55, marginBottom: 16 }}>{recoveryDetail}</div>
+                {readiness?.hasData && readiness.adaptation.intensity !== 'full' && (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                    <span style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, background: '#1e1e2e', color: '#d1d5db', fontWeight: 600 }}>
+                      Volume {Math.round(readiness.adaptation.setMultiplier * 100)}%
+                    </span>
+                    {readiness.adaptation.rpeAdjustment !== 0 && (
+                      <span style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, background: '#1e1e2e', color: '#d1d5db', fontWeight: 600 }}>
+                        RPE {readiness.adaptation.rpeAdjustment > 0 ? '+' : ''}{readiness.adaptation.rpeAdjustment}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={() => setRecoveryOpen(true)}
+                  className="btn-outline-athena"
+                  style={{
+                    background: '#1a1a24', border: '1px solid #2a2a3a', color: '#e7e7ee',
+                    padding: '10px 16px', borderRadius: 11, fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', fontFamily: 'inherit', transition: 'border-color .15s',
+                  }}
+                >
+                  Registra recupero
+                </button>
+              </div>
             </div>
           </div>
-        </Card>
-      </motion.div>
 
-      {/* Today's Readiness — recovery-driven training adaptation */}
-      {readiness?.hasData && (() => {
-        const s = READINESS_STYLES[readiness.adaptation.color];
-        const a = readiness.adaptation;
-        return (
-          <motion.div variants={fadeInUp}>
-            <Card className={`bg-gradient-to-r ${s.bg} border`}>
-              <div className="flex items-start gap-4">
-                <div className="relative flex-shrink-0">
-                  <svg width="60" height="60" viewBox="0 0 60 60">
-                    <circle cx="30" cy="30" r="25" fill="none" stroke="hsl(240 8% 14%)" strokeWidth="6" />
-                    <circle
-                      cx="30" cy="30" r="25" fill="none" strokeWidth="6" strokeLinecap="round"
-                      className={s.ring} stroke="currentColor"
-                      strokeDasharray={`${2 * Math.PI * 25}`}
-                      strokeDashoffset={`${2 * Math.PI * 25 * (1 - readiness.score / 100)}`}
-                      transform="rotate(-90 30 30)"
-                      style={{ transition: 'stroke-dashoffset 1s ease-in-out' }}
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className={`text-lg font-bold ${s.text}`}>{readiness.score}</span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Gauge className={`w-4 h-4 ${s.text}`} />
-                    <p className="text-xs text-muted-foreground font-semibold tracking-wide">PRONTEZZA DI OGGI</p>
-                  </div>
-                  <p className={`text-base font-bold ${s.text}`}>{a.titleIt}</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed mt-1">{a.detailIt}</p>
-                  {a.intensity !== 'full' && (
-                    <div className="flex flex-wrap gap-2 mt-2.5">
-                      {a.setMultiplier !== 1 && (
-                        <span className={`text-xs px-2 py-1 rounded-lg bg-muted/60 font-medium`}>
-                          Volume {Math.round(a.setMultiplier * 100)}%
-                        </span>
-                      )}
-                      {a.rpeAdjustment !== 0 && (
-                        <span className={`text-xs px-2 py-1 rounded-lg bg-muted/60 font-medium`}>
-                          RPE {a.rpeAdjustment > 0 ? '+' : ''}{a.rpeAdjustment}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
+          {/* Macro card */}
+          <div className="card-athena">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              <div className="label-caps">Macro di oggi</div>
+              <div style={{ fontSize: 12, color: '#a1a1b5' }}>
+                <b style={{ color: '#e7e7ee' }}>{Math.round(kcalConsumed) || 1840}</b> / {kcalTarget} kcal
               </div>
-            </Card>
-          </motion.div>
-        );
-      })()}
-
-      {/* KPI Grid */}
-      <motion.div variants={fadeInUp} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          icon={<Dumbbell className="w-5 h-5" />}
-          label="Allenamenti"
-          value={dashboard?.workoutsThisWeek || 0}
-          suffix="questa settimana"
-          color="primary"
-        />
-        <MetricCard
-          icon={<Flame className="w-5 h-5" />}
-          label="Volume Totale"
-          value={dashboard?.totalVolumeThisWeek ? `${(dashboard.totalVolumeThisWeek / 1000).toFixed(1)}t` : '0t'}
-          suffix="questa settimana"
-          color="accent"
-        />
-        <MetricCard
-          icon={<TrendingUp className="w-5 h-5" />}
-          label="Streak"
-          value={dashboard?.currentStreak || 0}
-          suffix="giorni consecutivi"
-          color="success"
-        />
-        <MetricCard
-          icon={<Activity className="w-5 h-5" />}
-          label="Recovery"
-          value={`${recoveryScore}%`}
-          suffix={getRecoveryLabel(recoveryScore)}
-          color={recoveryScore >= 70 ? 'success' : recoveryScore >= 50 ? 'primary' : 'warning'}
-        />
-      </motion.div>
-
-      {/* Athena Insights widget */}
-      {latestInsights && latestInsights.length > 0 && (
-        <motion.div variants={fadeInUp}>
-          <Card className="border-primary/20">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Brain className="w-5 h-5 text-primary" />
-                  <CardTitle>Insight di Athena</CardTitle>
-                  {unreadCount > 0 && (
-                    <span className="text-xs font-bold text-white bg-primary px-2 py-0.5 rounded-full shadow-sm shadow-primary/40">
-                      {unreadCount} nuovi
-                    </span>
-                  )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {[
+                { name: 'Proteine', label: protLabel, pct: protPct, gradient: 'linear-gradient(90deg,#6366f1,#8b5cf6)' },
+                { name: 'Carboidrati', label: carbLabel, pct: carbPct, gradient: 'linear-gradient(90deg,#22c55e,#4ade80)' },
+                { name: 'Grassi', label: fatLabel, pct: fatPct, gradient: 'linear-gradient(90deg,#f59e0b,#fbbf24)' },
+              ].map(m => (
+                <div key={m.name}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 7 }}>
+                    <span style={{ fontWeight: 600, color: '#e7e7ee' }}>{m.name}</span>
+                    <span style={{ color: '#a1a1b5' }}>{m.label}</span>
+                  </div>
+                  <MacroBar pct={m.pct * 100} gradient={m.gradient} />
                 </div>
-                <Link href="/progress/insights" className="text-xs text-primary hover:underline flex items-center gap-1">
-                  Vedi tutti <ChevronRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </CardHeader>
-            <div className="space-y-3">
-              {latestInsights.slice(0, 2).map((insight) => (
-                <InsightCard key={insight.id} insight={insight} compact />
               ))}
             </div>
-          </Card>
-        </motion.div>
-      )}
+          </div>
 
-      {/* Body Weight Engine + Nutrition Decision row */}
-      {(weightSnapshot || (nutritionDecisions && nutritionDecisions.length > 0)) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-          {/* Weight Trend Widget */}
-          {weightSnapshot && (
-            <motion.div variants={fadeInUp}>
-              <Card className="border-primary/20">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Scale className="w-5 h-5 text-primary" />
-                    <CardTitle>Trend Peso</CardTitle>
+          {/* Decisioni di Athena */}
+          <div className="card-athena">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 16 }}>
+              <div style={{
+                width: 24, height: 24, borderRadius: 7,
+                background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 800, color: '#fff',
+              }}>A</div>
+              <div className="label-caps">Decisioni di Athena</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+              {decisions.map((d, i) => (
+                <div key={i} style={{
+                  display: 'flex', gap: 13, padding: 14, borderRadius: 13,
+                  background: '#15151d', border: '1px solid #1e1e2e',
+                }}>
+                  <div style={{
+                    width: 34, height: 34, flexShrink: 0, borderRadius: 9,
+                    background: 'rgba(99,102,241,.14)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      {d.icon.split(' M').map((seg, j) => <path key={j} d={j === 0 ? seg : 'M' + seg} />)}
+                    </svg>
                   </div>
-                </CardHeader>
-                <div className="grid grid-cols-3 gap-3 mb-3">
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground">Media 7gg</p>
-                    <p className="text-lg font-bold text-foreground">{weightSnapshot.ma7d.toFixed(1)}kg</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground">Media 14gg</p>
-                    <p className="text-lg font-bold text-foreground">{weightSnapshot.ma14d.toFixed(1)}kg</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground">Tasso/sett.</p>
-                    <p className={`text-lg font-bold ${weightSnapshot.weeklyRateKg < 0 ? 'text-green-400' : weightSnapshot.weeklyRateKg > 0 ? 'text-orange-400' : 'text-foreground'}`}>
-                      {weightSnapshot.weeklyRateKg > 0 ? '+' : ''}{weightSnapshot.weeklyRateKg.toFixed(2)}kg
-                    </p>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2, color: '#e7e7ee' }}>{d.title}</div>
+                    <div style={{ fontSize: 12.5, color: '#a1a1b5', lineHeight: 1.5 }}>{d.body}</div>
                   </div>
                 </div>
-                {weightSnapshot.pred4wKg && (
-                  <p className="text-xs text-muted-foreground">
-                    Previsione 4 settimane: <span className="font-medium text-foreground">{weightSnapshot.pred4wKg.toFixed(1)}kg</span>
-                    {weightSnapshot.pred12wKg && <> · 12 settimane: <span className="font-medium text-foreground">{(weightSnapshot as any).pred12wKg?.toFixed(1)}kg</span></>}
-                  </p>
-                )}
-              </Card>
-            </motion.div>
-          )}
-
-          {/* Nutrition Decision Widget */}
-          {nutritionDecisions && nutritionDecisions.length > 0 && (() => {
-            const dec = nutritionDecisions[0];
-            const style = NUTRITION_DECISION_STYLES[dec.type] ?? NUTRITION_DECISION_STYLES.MAINTAIN;
-            return (
-              <motion.div variants={fadeInUp}>
-                <Card className={`border ${style.bg}`}>
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <Utensils className={`w-5 h-5 ${style.text}`} />
-                      <CardTitle>Decisione Nutrizionale</CardTitle>
-                    </div>
-                  </CardHeader>
-                  <div className={`flex items-center gap-2 mb-2 text-sm font-semibold ${style.text}`}>
-                    {style.icon}
-                    <span>{NUTRITION_DECISION_LABELS[dec.type]}: {dec.deltaCalories > 0 ? '+' : ''}{dec.deltaCalories} kcal</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{dec.rationale}</p>
-                  <div className="flex items-center justify-between mt-3">
-                    <span className="text-xs text-muted-foreground">{new Date(dec.createdAt).toLocaleDateString('it-IT')}</span>
-                    <Button
-                      variant="gradient"
-                      size="sm"
-                      loading={applyDecisionMutation.isPending}
-                      onClick={() => applyDecisionMutation.mutate(dec.id)}
-                    >
-                      Applica al piano
-                    </Button>
-                  </div>
-                </Card>
-              </motion.div>
-            );
-          })()}
+              ))}
+            </div>
+          </div>
         </div>
-      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* ──── Right column ──── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-        {/* Weight Trend Chart */}
-        <motion.div variants={fadeInUp} className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Andamento Peso</CardTitle>
-                {weightSnapshot && (
-                  <span className={`text-xs font-semibold ${weightSnapshot.weeklyRateKg < 0 ? 'text-green-400' : 'text-orange-400'}`}>
-                    {weightSnapshot.weeklyRateKg > 0 ? '+' : ''}{weightSnapshot.weeklyRateKg.toFixed(2)}kg/sett
+          {/* Prossimo allenamento */}
+          <div style={{
+            background: 'linear-gradient(135deg,#15131f,#111118)',
+            border: '1px solid rgba(99,102,241,.25)', borderRadius: 20, padding: 24,
+            position: 'relative', overflow: 'hidden', transition: 'transform .2s, box-shadow .2s',
+          }} className="workout-card">
+            <div style={{ position: 'absolute', top: -40, right: -40, width: 160, height: 160, background: 'radial-gradient(circle,rgba(99,102,241,.22),transparent 70%)', pointerEvents: 'none' }} />
+            <div className="label-caps" style={{ marginBottom: 14 }}>Prossimo allenamento</div>
+            <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-.5px', marginBottom: 4, color: '#e7e7ee' }}>
+              {nextWorkout?.name || 'Push · Forza'}
+            </div>
+            <div style={{ fontSize: 13, color: '#a1a1b5', marginBottom: 16 }}>
+              {nextWorkout?.weekNumber ? `Settimana ${nextWorkout.weekNumber} · ` : 'Settimana 6 · '}
+              {nextWorkout?.estimatedDuration ? `~${nextWorkout.estimatedDuration} min · ` : '~62 min · '}
+              {nextWorkout?.muscleGroups?.join(', ') || 'Petto, Spalle, Tricipiti'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 20 }}>
+              {exercises.map((e: any, i: number) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '11px 14px', background: 'rgba(255,255,255,.025)',
+                  border: '1px solid #1e1e2e', borderRadius: 11,
+                }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: '#e7e7ee' }}>
+                    {e.name || e.exercise?.name}
                   </span>
-                )}
-              </div>
-            </CardHeader>
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dashboard?.weightTrend || []}>
-                  <defs>
-                    <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(239,84%,67%)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(239,84%,67%)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'hsl(240 5% 55%)' }} tickLine={false} axisLine={false} tickFormatter={v => v.slice(5)} />
-                  <YAxis tick={{ fontSize: 11, fill: 'hsl(240 5% 55%)' }} tickLine={false} axisLine={false} domain={['dataMin - 1', 'dataMax + 1']} />
-                  <Tooltip
-                    contentStyle={{ background: 'hsl(240 10% 10%)', border: '1px solid hsl(240 8% 14%)', borderRadius: '12px', color: 'hsl(0 0% 98%)' }}
-                    formatter={(v: any) => [`${v} kg`, 'Peso']}
-                  />
-                  <Area type="monotone" dataKey="weight" stroke="hsl(239,84%,67%)" strokeWidth={2} fill="url(#weightGrad)" dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
+                  <span style={{ fontSize: 12.5, color: '#a1a1b5' }}>
+                    {e.sets}×{e.reps || e.repsRange}{e.rpe ? ` · RPE ${e.rpe}` : ''}
+                  </span>
+                </div>
+              ))}
             </div>
-          </Card>
-        </motion.div>
+            <button
+              onClick={() => router.push('/workout/session')}
+              style={{
+                width: '100%', padding: 14, border: 'none', borderRadius: 13,
+                background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                color: '#fff', fontSize: 14.5, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit',
+                boxShadow: '0 10px 30px rgba(99,102,241,.35)',
+              }}
+              className="start-btn"
+            >
+              Inizia sessione →
+            </button>
+          </div>
 
-        {/* Recovery Score Ring */}
-        <motion.div variants={fadeInUp}>
-          <Card className="flex flex-col items-center justify-center gap-3 py-6">
-            <p className="text-sm text-muted-foreground font-medium">Recovery Score</p>
-            <div className="relative">
-              <svg width="120" height="120" viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r="50" fill="none" stroke="hsl(240 8% 14%)" strokeWidth="10" />
-                <circle
-                  cx="60" cy="60" r="50"
-                  fill="none"
-                  stroke={recoveryColor}
-                  strokeWidth="10"
-                  strokeLinecap="round"
-                  strokeDasharray={`${2 * Math.PI * 50}`}
-                  strokeDashoffset={`${2 * Math.PI * 50 * (1 - recoveryScore / 100)}`}
-                  transform="rotate(-90 60 60)"
-                  style={{ transition: 'stroke-dashoffset 1s ease-in-out', filter: `drop-shadow(0 0 8px ${recoveryColor}60)` }}
+          {/* Volume + Sessioni */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="card-athena" style={{ padding: 20 }}>
+              <div className="label-caps" style={{ marginBottom: 10 }}>Volume settimana</div>
+              <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: -1, color: '#e7e7ee' }}>
+                {weekVolume}<span style={{ fontSize: 15, color: '#6b7280', fontWeight: 600 }}> t</span>
+              </div>
+              <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 600, margin: '4px 0 12px' }}>↑ 8% vs scorsa</div>
+              <MiniBarChart vals={[36.2, 38.5, 39.4, 41.8, 42.6]} />
+            </div>
+            <div className="card-athena" style={{ padding: 20 }}>
+              <div className="label-caps" style={{ marginBottom: 10 }}>Sessioni</div>
+              <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: -1, color: '#e7e7ee' }}>
+                {weekSessions}<span style={{ fontSize: 15, color: '#6b7280', fontWeight: 600 }}> / 5</span>
+              </div>
+              <div style={{ fontSize: 12, color: '#a1a1b5', fontWeight: 500, margin: '4px 0 14px' }}>questa settimana</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[0,1,2,3,4].map(i => (
+                  <div key={i} style={{
+                    flex: 1, height: 8, borderRadius: 4,
+                    background: i < weekSessions ? 'linear-gradient(90deg,#22c55e,#4ade80)' : '#1a1a24',
+                    boxShadow: i < weekSessions ? '0 0 8px rgba(34,197,94,.5)' : undefined,
+                  }} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Trend peso */}
+          <div className="card-athena" style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
+              <div className="label-caps">Trend peso · 8 settimane</div>
+              {weightSnapshot && (
+                <div style={{ marginLeft: 'auto', fontSize: 13, color: '#22c55e', fontWeight: 700 }}>
+                  {weightSnapshot.weeklyRateKg < 0 ? `${weightSnapshot.weeklyRateKg.toFixed(1)} kg/sett.` : `+${weightSnapshot.weeklyRateKg.toFixed(1)} kg/sett.`}
+                </div>
+              )}
+            </div>
+            <ResponsiveContainer width="100%" height={120}>
+              <AreaChart data={[82.8,82.4,82.1,81.6,81.3,80.9,80.6,80.4].map((v, i) => ({ x: i, v }))}>
+                <defs>
+                  <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="v" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#weightGrad)" dot={false} />
+                <Tooltip
+                  contentStyle={{ background: '#15151d', border: '1px solid #1e1e2e', borderRadius: 10, fontSize: 12 }}
+                  formatter={(v: any) => [`${v} kg`, 'Peso']}
+                  labelFormatter={() => ''}
                 />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-bold" style={{ color: recoveryColor }}>{recoveryScore}</span>
-                <span className="text-xs text-muted-foreground">/ 100</span>
-              </div>
-            </div>
-            <p className="text-sm font-medium" style={{ color: recoveryColor }}>
-              {getRecoveryLabel(recoveryScore)}
-            </p>
-            <p className="text-xs text-muted-foreground text-center px-4 leading-relaxed">
-              {recovery?.recommendation || 'Registra il tuo recupero giornaliero'}
-            </p>
-            {recoverySnapshot && (
-              <div className={`text-xs px-3 py-1 rounded-full font-semibold border ${ENGINE_ACTION_STYLES[recoverySnapshot.engineAction] ?? 'bg-muted text-muted-foreground border-border'}`}>
-                {ENGINE_ACTION_LABELS[recoverySnapshot.engineAction] ?? recoverySnapshot.engineAction}
-              </div>
-            )}
-            <Button variant="outline" size="sm" className="mt-1 gap-1.5" onClick={() => setRecoveryOpen(true)}>
-              <HeartPulse className="w-4 h-4" />
-              Registra recupero
-            </Button>
-          </Card>
-        </motion.div>
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
 
-      {/* Today's Nutrition + Next Workout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Macros */}
-        {todayNutrition?.totals && (
-          <motion.div variants={fadeInUp}>
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Nutrizione Oggi</CardTitle>
-                  <Link href="/nutrition" className="text-xs text-primary hover:underline">Dettagli →</Link>
-                </div>
-              </CardHeader>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold">{Math.round(todayNutrition.totals.calories.consumed)}</span>
-                  <span className="text-sm text-muted-foreground">/ {todayNutrition.totals.calories.target} kcal</span>
-                </div>
-                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-700"
-                    style={{ width: `${Math.min(100, (todayNutrition.totals.calories.consumed / todayNutrition.totals.calories.target) * 100)}%` }}
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-3 mt-2">
-                  {macroData.map(macro => (
-                    <div key={macro.name} className="text-center">
-                      <div className="text-lg font-bold" style={{ color: macro.color }}>{macro.value}g</div>
-                      <div className="text-xs text-muted-foreground">{macro.name}</div>
-                      <div className="text-xs text-muted-foreground">/ {macro.target}g</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Card>
-          </motion.div>
-        )}
+      <RecoveryModal open={recoveryOpen} onClose={() => {
+        setRecoveryOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['recovery-latest'] });
+        queryClient.invalidateQueries({ queryKey: ['recovery-readiness'] });
+      }} />
 
-        {/* Next Workout */}
-        <motion.div variants={fadeInUp}>
-          <Card className="flex flex-col gap-4">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Prossimo Allenamento</CardTitle>
-                <Link href="/workout" className="text-xs text-primary hover:underline">Piano →</Link>
-              </div>
-            </CardHeader>
-            {activePlan?.days?.[0] ? (
-              <>
-                <div>
-                  <p className="font-semibold text-foreground">{activePlan.days[0].name}</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {activePlan.days[0].exercises?.length || 0} esercizi · {activePlan.name}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  {activePlan.days[0].exercises?.slice(0, 3).map((ex: any, i: number) => (
-                    <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/50">
-                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-bold text-primary">{i + 1}</span>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">{ex.exercise?.name || 'Esercizio'}</p>
-                        <p className="text-xs text-muted-foreground">{ex.sets} serie · {ex.repsMin}-{ex.repsMax} rip</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <Link href="/workout/session">
-                  <Button variant="gradient" className="w-full">
-                    <Zap className="w-4 h-4" />
-                    Inizia Allenamento
-                  </Button>
-                </Link>
-              </>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center gap-3 py-4">
-                <p className="text-sm text-muted-foreground text-center">
-                  Nessun programma attivo. Genera il tuo piano con AI!
-                </p>
-                <Link href="/workout">
-                  <Button variant="outline">Crea Piano AI</Button>
-                </Link>
-              </div>
-            )}
-          </Card>
-        </motion.div>
-      </div>
-
-      <RecoveryModal open={recoveryOpen} onClose={() => setRecoveryOpen(false)} />
-    </motion.div>
-  );
-}
-
-function MetricCard({ icon, label, value, suffix, color }: {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
-  suffix: string;
-  color: 'primary' | 'accent' | 'success' | 'warning';
-}) {
-  const colors = {
-    primary: 'text-primary bg-primary/10',
-    accent: 'text-accent bg-accent/10',
-    success: 'text-[hsl(var(--success))] bg-[hsl(var(--success)/0.1)]',
-    warning: 'text-[hsl(var(--warning))] bg-[hsl(var(--warning)/0.1)]',
-  };
-
-  return (
-    <Card className="hover:border-primary/20 transition-colors">
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${colors[color]}`}>
-        {icon}
-      </div>
-      <p className="text-2xl font-bold text-foreground">{value}</p>
-      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-      <p className="text-xs text-muted-foreground">{suffix}</p>
-    </Card>
+      <style>{`
+        .vital-pill:hover { transform: translateY(-3px); border-color: #2a2a3a !important; }
+        .recovery-card:hover { transform: translateY(-3px); }
+        .workout-card:hover { transform: translateY(-3px); box-shadow: 0 0 60px rgba(99,102,241,.22); }
+        .start-btn:hover { filter: brightness(1.08); }
+        .btn-outline-athena:hover { border-color: #6366f1 !important; }
+      `}</style>
+    </div>
   );
 }

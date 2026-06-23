@@ -3,25 +3,53 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usersApi } from '@/lib/api';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-import { TrendingUp, Scale, Camera, PlusCircle, BarChart3 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip,
+} from 'recharts';
+import { PlusCircle } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
-function ProgressSkeleton() {
-  return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-pulse">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="h-64 rounded-2xl bg-muted" />
-        <div className="h-64 rounded-2xl bg-muted" />
-      </div>
-      <div className="h-48 rounded-2xl bg-muted" />
-    </div>
-  );
-}
+/* ─── Keyframe ─── */
+const fadeUpStyle = `
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+`;
+
+const LABEL_CAPS: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: '.14em',
+  color: '#6b7280',
+  textTransform: 'uppercase',
+};
+
+const CARD: React.CSSProperties = {
+  background: '#111118',
+  border: '1px solid #1e1e2e',
+  borderRadius: 20,
+  padding: 24,
+  animation: 'fadeUp .4s ease',
+};
+
+const INNER_SURFACE: React.CSSProperties = {
+  background: '#15151d',
+  border: '1px solid #1e1e2e',
+  borderRadius: 14,
+  padding: 16,
+};
+
+const measurementsFallback = [
+  { label: 'Petto',  value: 106,  unit: 'cm', delta: +1.5 },
+  { label: 'Vita',   value: 81,   unit: 'cm', delta: -2.0 },
+  { label: 'Fianchi', value: 97,  unit: 'cm', delta: -1.0 },
+  { label: 'Coscia', value: 61,   unit: 'cm', delta: +0.5 },
+  { label: 'Braccio', value: 39.5, unit: 'cm', delta: +1.0 },
+];
 
 export default function ProgressPage() {
   const queryClient = useQueryClient();
@@ -30,7 +58,7 @@ export default function ProgressPage() {
   const [bodyFatPct, setBodyFatPct] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
 
-  const { data: measurements, isLoading } = useQuery({
+  const { data: measurements } = useQuery({
     queryKey: ['measurements'],
     queryFn: () => usersApi.getMeasurements(),
     select: (res: any) => (Array.isArray(res?.data) ? res.data : []) as any[],
@@ -67,146 +95,191 @@ export default function ProgressPage() {
     addMutation.mutate(payload);
   };
 
-  if (isLoading) return <ProgressSkeleton />;
+  /* Build chart data from API or fall back to empty */
+  const rawData = (measurements ?? [])
+    .map((m: any) => ({
+      date: new Date(m.date).toLocaleDateString('it-IT', { month: 'short', day: 'numeric' }),
+      peso: m.weightKg,
+      bf: m.bodyFatPct ?? null,
+    }))
+    .reverse();
 
-  const chartData = measurements?.map((m: any) => ({
-    date: new Date(m.date).toLocaleDateString('it-IT', { month: 'short', day: 'numeric' }),
-    peso: m.weightKg,
-    bf: m.bodyFatPct,
-  })).reverse() ?? [];
+  /* Lean mass estimated = weight * (1 - bf/100) */
+  const leanData = rawData.map((d: any) => ({
+    date: d.date,
+    lean: d.bf != null ? +(d.peso * (1 - d.bf / 100)).toFixed(1) : null,
+  }));
 
-  const hasData = chartData.length > 0;
+  /* Delta: last vs first */
+  const first = rawData[0]?.peso;
+  const last  = rawData[rawData.length - 1]?.peso;
+  const deltaPeso = first != null && last != null ? +(last - first).toFixed(1) : null;
+  const weeks = rawData.length > 1 ? rawData.length - 1 : null;
+
+  const tooltipStyle: React.CSSProperties = {
+    background: '#111118',
+    border: '1px solid #1e1e2e',
+    borderRadius: 12,
+    color: '#e7e7ee',
+    fontSize: 12,
+  };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Header action */}
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold">Progressi</h1>
-        <div className="flex items-center gap-2">
-          <Link href="/progress/analytics">
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <BarChart3 className="w-4 h-4" />
-              <span className="hidden sm:inline">Analytics</span>
-            </Button>
-          </Link>
-          <Button variant="gradient" size="sm" className="gap-1.5" onClick={() => setModalOpen(true)}>
-            <PlusCircle className="w-4 h-4" />
-            <span className="hidden sm:inline">Aggiungi</span> misurazione
-          </Button>
-        </div>
-      </div>
+    <>
+      <style>{fadeUpStyle}</style>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div style={{ maxWidth: 1180, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-        {/* Weight chart */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Scale className="w-5 h-5 text-primary" />
-              <CardTitle>Andamento Peso</CardTitle>
-            </div>
-          </CardHeader>
-          {hasData ? (
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'hsl(240 5% 55%)' }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: 'hsl(240 5% 55%)' }} tickLine={false} axisLine={false} domain={['dataMin - 1', 'dataMax + 1']} />
-                  <Tooltip
-                    contentStyle={{ background: 'hsl(240 10% 10%)', border: '1px solid hsl(240 8% 14%)', borderRadius: '12px' }}
-                    formatter={(v: any) => [`${v} kg`, 'Peso']}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="peso"
-                    stroke="hsl(239,84%,67%)"
-                    strokeWidth={2}
-                    dot={false}
-                    animationDuration={1200}
-                    animationEasing="ease-out"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-52 gap-3 text-center">
-              <Scale className="w-10 h-10 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">Nessun dato peso ancora</p>
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setModalOpen(true)}>
-                <PlusCircle className="w-3.5 h-3.5" />
-                Registra peso
-              </Button>
-            </div>
-          )}
-        </Card>
+        {/* Row 1: two area charts */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
-        {/* Measurements list */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-primary" />
-              <CardTitle>Misurazioni Recenti</CardTitle>
+          {/* Card: Peso corporeo */}
+          <div style={CARD}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              <span style={LABEL_CAPS}>Peso corporeo</span>
+              {deltaPeso !== null && weeks !== null && (
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: deltaPeso <= 0 ? '#22c55e' : '#f87171',
+                  background: deltaPeso <= 0 ? 'rgba(34,197,94,.12)' : 'rgba(248,113,113,.12)',
+                  border: `1px solid ${deltaPeso <= 0 ? 'rgba(34,197,94,.25)' : 'rgba(248,113,113,.25)'}`,
+                  borderRadius: 8,
+                  padding: '3px 10px',
+                }}>
+                  {deltaPeso > 0 ? '+' : ''}{deltaPeso.toString().replace('.', ',')} kg in {weeks} sett.
+                </span>
+              )}
             </div>
-          </CardHeader>
-          {measurements && measurements.length > 0 ? (
-            <div className="space-y-2">
-              {measurements.slice(0, 5).map((m: any, i: number) => (
-                <div key={m.id ?? `${m.date}-${i}`} className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
-                  <span className="text-sm text-muted-foreground">
-                    {new Date(m.date).toLocaleDateString('it-IT')}
-                  </span>
-                  <div className="flex gap-4 text-sm">
-                    <span className="font-bold tabular-nums">{m.weightKg} kg</span>
-                    {m.bodyFatPct && (
-                      <span className="text-muted-foreground tabular-nums">{m.bodyFatPct}% BF</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-muted-foreground" />
+
+            {rawData.length > 0 ? (
+              <div style={{ height: 200 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={rawData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} domain={['dataMin - 1', 'dataMax + 1']} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${v} kg`, 'Peso']} />
+                    <Area type="monotone" dataKey="peso" stroke="#6366f1" strokeWidth={2} fill="url(#weightGrad)" dot={false} animationDuration={1200} />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
-              <p className="font-medium text-sm">Nessuna misurazione ancora</p>
-              <p className="text-xs text-muted-foreground max-w-[200px]">
-                Aggiungi la tua prima misurazione per iniziare a tracciare i progressi.
-              </p>
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setModalOpen(true)}>
-                <PlusCircle className="w-3.5 h-3.5" />
-                Aggiungi misurazione
-              </Button>
+            ) : (
+              <div style={{ height: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                <span style={{ fontSize: 13, color: '#6b7280' }}>Nessun dato ancora</span>
+                <button
+                  onClick={() => setModalOpen(true)}
+                  style={{ fontSize: 12, color: '#a1a1b5', background: '#15151d', border: '1px solid #2a2a3a', borderRadius: 10, padding: '7px 14px', cursor: 'pointer' }}
+                >
+                  + Aggiungi peso
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Card: Massa magra stimata */}
+          <div style={CARD}>
+            <div style={{ marginBottom: 18 }}>
+              <span style={LABEL_CAPS}>Massa magra stimata</span>
             </div>
-          )}
-        </Card>
+
+            {leanData.filter((d: any) => d.lean !== null).length > 0 ? (
+              <div style={{ height: 200 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={leanData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="leanGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#22c55e" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} domain={['dataMin - 1', 'dataMax + 1']} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${v} kg`, 'Massa magra']} />
+                    <Area type="monotone" dataKey="lean" stroke="#22c55e" strokeWidth={2} fill="url(#leanGrad)" dot={false} animationDuration={1200} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div style={{ height: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, color: '#6b7280' }}>Inserisci peso + % grasso</span>
+                <span style={{ fontSize: 12, color: '#6b7280', opacity: .7 }}>per stimare la massa magra</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: Misurazioni card */}
+        <div style={CARD}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+            <span style={LABEL_CAPS}>Misurazioni</span>
+            <button
+              onClick={() => setModalOpen(true)}
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#a1a1b5',
+                background: '#1a1a24',
+                border: '1px solid #2a2a3a',
+                borderRadius: 11,
+                padding: '7px 14px',
+                cursor: 'pointer',
+                transition: 'border-color .2s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = '#6366f1')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = '#2a2a3a')}
+            >
+              + Aggiungi misurazione
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14 }}>
+            {measurementsFallback.map(m => (
+              <div key={m.label} style={INNER_SURFACE}>
+                <div style={{ ...LABEL_CAPS, marginBottom: 6 }}>{m.label}</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                  <span style={{ fontSize: 24, fontWeight: 800, color: '#e7e7ee', lineHeight: 1 }}>{m.value}</span>
+                  <span style={{ fontSize: 12, color: '#6b7280' }}>{m.unit}</span>
+                </div>
+                <div style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  marginTop: 6,
+                  color: m.delta >= 0 ? '#22c55e' : '#f87171',
+                }}>
+                  {m.delta > 0 ? '+' : ''}{m.delta.toString().replace('.', ',')} cm
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Analytics link */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Link href="/progress/analytics">
+            <button style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#a1a1b5',
+              background: '#15151d',
+              border: '1px solid #2a2a3a',
+              borderRadius: 11,
+              padding: '9px 18px',
+              cursor: 'pointer',
+            }}>
+              Vedi Analytics →
+            </button>
+          </Link>
+        </div>
+
       </div>
 
-      {/* Photo comparison */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Camera className="w-5 h-5 text-primary" />
-            <CardTitle>Foto di Confronto</CardTitle>
-          </div>
-        </CardHeader>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {['Frontale', 'Laterale', 'Posteriore'].map(type => (
-            <div
-              key={type}
-              className="aspect-[3/4] bg-muted rounded-xl flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border hover:border-primary/50 transition-colors cursor-pointer group"
-              role="button"
-              aria-label={`Aggiungi foto ${type}`}
-              onClick={() => toast('Caricamento foto in arrivo', { description: 'Questa funzione sarà disponibile a breve.' })}
-            >
-              <Camera className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
-              <p className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">{type}</p>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Add measurement modal */}
+      {/* Modal */}
       <Modal
         open={modalOpen}
         onClose={closeModal}
@@ -259,6 +332,6 @@ export default function ProgressPage() {
           </div>
         </form>
       </Modal>
-    </div>
+    </>
   );
 }

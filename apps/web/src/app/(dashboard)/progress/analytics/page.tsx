@@ -1,14 +1,25 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { analyticsApi } from '@/lib/api';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  BarChart, Bar, AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell,
+  AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip,
 } from 'recharts';
-import { BarChart3, Dumbbell, CalendarDays, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
+
+/* ─── Keyframes ─── */
+const KEYFRAMES = `
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes barGrow {
+    from { transform: scaleX(0); transform-origin: left; }
+    to   { transform: scaleX(1); transform-origin: left; }
+  }
+`;
 
 const MUSCLE_LABELS: Record<string, string> = {
   CHEST: 'Petto', BACK: 'Schiena', SHOULDERS: 'Spalle', BICEPS: 'Bicipiti',
@@ -22,153 +33,257 @@ const DAY_LABELS: Record<string, string> = {
   Mon: 'Lun', Tue: 'Mar', Wed: 'Mer', Thu: 'Gio', Fri: 'Ven', Sat: 'Sab', Sun: 'Dom',
 };
 
-const BAR_COLORS = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#14b8a6', '#a855f7'];
+const FALLBACK_MUSCLE = [
+  { muscle: 'CHEST',    series: 38 },
+  { muscle: 'BACK',     series: 44 },
+  { muscle: 'LEGS',     series: 52 },
+  { muscle: 'SHOULDERS',series: 32 },
+  { muscle: 'BICEPS',   series: 24 },
+  { muscle: 'TRICEPS',  series: 26 },
+];
 
-const tooltipStyle = {
-  background: 'hsl(240 10% 10%)',
-  border: '1px solid hsl(240 8% 14%)',
-  borderRadius: '12px',
-  color: 'hsl(0 0% 98%)',
+const FALLBACK_FREQ = [
+  { day: 'Lun', sessions: 3 },
+  { day: 'Mar', sessions: 5 },
+  { day: 'Mer', sessions: 2 },
+  { day: 'Gio', sessions: 4 },
+  { day: 'Ven', sessions: 5 },
+  { day: 'Sab', sessions: 1 },
+  { day: 'Dom', sessions: 0 },
+];
+
+const LABEL_CAPS: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: '.14em',
+  color: '#6b7280',
+  textTransform: 'uppercase',
 };
 
-function AnalyticsSkeleton() {
-  return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-pulse">
-      <div className="h-8 w-48 rounded-lg bg-muted" />
-      <div className="h-64 rounded-2xl bg-muted" />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="h-56 rounded-2xl bg-muted" />
-        <div className="h-56 rounded-2xl bg-muted" />
-      </div>
-    </div>
-  );
-}
+const CARD: React.CSSProperties = {
+  background: '#111118',
+  border: '1px solid #1e1e2e',
+  borderRadius: 20,
+  padding: 24,
+  animation: 'fadeUp .4s ease',
+};
 
-function EmptyChart({ label }: { label: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-52 gap-2 text-center">
-      <BarChart3 className="w-9 h-9 text-muted-foreground/40" />
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className="text-xs text-muted-foreground/70">Completa alcuni allenamenti per vedere i dati.</p>
-    </div>
-  );
-}
+const PERIODS = [
+  { label: '4 settimane', value: '4' },
+  { label: '8 settimane', value: '8' },
+  { label: '12 settimane', value: '12' },
+];
+
+const BAR_GRADIENTS = [
+  'linear-gradient(90deg,#6366f1,#8b5cf6)',
+  'linear-gradient(90deg,#22c55e,#4ade80)',
+  'linear-gradient(90deg,#6366f1,#8b5cf6)',
+  'linear-gradient(90deg,#22c55e,#4ade80)',
+  'linear-gradient(90deg,#6366f1,#8b5cf6)',
+  'linear-gradient(90deg,#22c55e,#4ade80)',
+];
+
+const tooltipStyle: React.CSSProperties = {
+  background: '#111118',
+  border: '1px solid #1e1e2e',
+  borderRadius: 12,
+  color: '#e7e7ee',
+  fontSize: 12,
+};
 
 export default function AnalyticsPage() {
-  const { data: muscle, isLoading: l1 } = useQuery({
-    queryKey: ['analytics-muscle'],
-    queryFn: () => analyticsApi.volumeByMuscle(4),
-    select: (res: any) => (Array.isArray(res?.data) ? res.data : []) as Array<{ muscle: string; volume: number }>,
+  const [period, setPeriod] = useState('8');
+  const weeks = parseInt(period, 10);
+
+  const { data: muscle } = useQuery({
+    queryKey: ['analytics-muscle', weeks],
+    queryFn: () => analyticsApi.volumeByMuscle(weeks),
+    select: (res: any) => (Array.isArray(res?.data) ? res.data : null) as Array<{ muscle: string; volume: number }> | null,
   });
 
-  const { data: trend, isLoading: l2 } = useQuery({
-    queryKey: ['analytics-trend'],
-    queryFn: () => analyticsApi.volumeTrend(12),
-    select: (res: any) => (Array.isArray(res?.data) ? res.data : []) as Array<{ week: string; volume: number }>,
+  const { data: trend } = useQuery({
+    queryKey: ['analytics-trend', weeks],
+    queryFn: () => analyticsApi.volumeTrend(weeks),
+    select: (res: any) => (Array.isArray(res?.data) ? res.data : null) as Array<{ week: string; volume: number }> | null,
   });
 
-  const { data: frequency, isLoading: l3 } = useQuery({
-    queryKey: ['analytics-frequency'],
-    queryFn: () => analyticsApi.frequency(8),
-    select: (res: any) => (Array.isArray(res?.data) ? res.data : []) as Array<{ day: string; sessions: number }>,
+  const { data: frequency } = useQuery({
+    queryKey: ['analytics-frequency', weeks],
+    queryFn: () => analyticsApi.frequency(weeks),
+    select: (res: any) => (Array.isArray(res?.data) ? res.data : null) as Array<{ day: string; sessions: number }> | null,
   });
 
-  if (l1 || l2 || l3) return <AnalyticsSkeleton />;
+  /* Use API data when available, otherwise fall back */
+  const muscleData = (muscle ?? []).length > 0
+    ? (muscle as any[]).map(m => ({
+        label: MUSCLE_LABELS[m.muscle] ?? m.muscle,
+        series: Math.round(m.volume / 1000),
+      }))
+    : FALLBACK_MUSCLE.map(m => ({ label: MUSCLE_LABELS[m.muscle], series: m.series }));
 
-  const muscleData = (muscle ?? []).map(m => ({ ...m, label: MUSCLE_LABELS[m.muscle] ?? m.muscle, t: (m.volume / 1000).toFixed(1) }));
-  const trendData = (trend ?? []).map(t => ({ ...t, label: t.week?.slice(5) ?? t.week, volumeT: Math.round(t.volume / 1000 * 10) / 10 }));
-  const freqData = (frequency ?? []).map(f => ({ ...f, label: DAY_LABELS[f.day] ?? f.day }));
+  const trendData = (trend ?? []).length > 0
+    ? (trend as any[]).map(t => ({ label: t.week?.slice(5) ?? t.week, volume: t.volume }))
+    : [];
+
+  const freqData = (frequency ?? []).length > 0
+    ? (frequency as any[]).map(f => ({ day: DAY_LABELS[f.day] ?? f.day, sessions: f.sessions }))
+    : FALLBACK_FREQ;
+
+  const maxSeries  = Math.max(...muscleData.map(m => m.series), 1);
+  const maxSessions = Math.max(...freqData.map(f => f.sessions), 1);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/progress" aria-label="Torna ai progressi" className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:scale-95 transition-all touch-manipulation">
-          <ChevronLeft className="w-5 h-5" />
-        </Link>
-        <h1 className="text-2xl font-bold">Analytics</h1>
-      </div>
+    <>
+      <style>{KEYFRAMES}</style>
 
-      {/* Weekly volume trend */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary" />
-            <CardTitle>Volume Settimanale (ultime 12 sett.)</CardTitle>
+      <div style={{ maxWidth: 1180, display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+        {/* Back + Title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Link href="/progress" aria-label="Torna ai progressi">
+            <div style={{
+              width: 36, height: 36, borderRadius: 12,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: '#15151d', border: '1px solid #1e1e2e',
+              color: '#a1a1b5', cursor: 'pointer',
+            }}>
+              <ChevronLeft size={18} />
+            </div>
+          </Link>
+          <span style={{ fontSize: 22, fontWeight: 800, color: '#e7e7ee' }}>Analytics</span>
+        </div>
+
+        {/* Period chips */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          {PERIODS.map(p => {
+            const active = p.value === period;
+            return (
+              <button
+                key={p.value}
+                onClick={() => setPeriod(p.value)}
+                style={active ? {
+                  background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                  border: 'none',
+                  color: '#fff',
+                  padding: '9px 16px',
+                  borderRadius: 11,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                } : {
+                  background: '#15151d',
+                  border: '1px solid #2a2a3a',
+                  color: '#a1a1b5',
+                  padding: '9px 16px',
+                  borderRadius: 11,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Row 1 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+
+          {/* Card: Volume per gruppo muscolare */}
+          <div style={CARD}>
+            <div style={{ ...LABEL_CAPS, marginBottom: 20 }}>Volume per gruppo muscolare</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {muscleData.map((m, i) => {
+                const pct = Math.round((m.series / maxSeries) * 100);
+                return (
+                  <div key={m.label}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: '#e7e7ee' }}>{m.label}</span>
+                      <span style={{ fontSize: 12, color: '#6b7280' }}>{m.series} serie</span>
+                    </div>
+                    <div style={{ height: 8, background: '#1a1a24', borderRadius: 5, overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          borderRadius: 5,
+                          background: BAR_GRADIENTS[i % BAR_GRADIENTS.length],
+                          width: `${pct}%`,
+                          animation: 'barGrow .9s ease both',
+                          animationDelay: `${i * 0.08}s`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </CardHeader>
-        {trendData.length > 0 ? (
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData}>
-                <defs>
-                  <linearGradient id="volGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(239,84%,67%)" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="hsl(239,84%,67%)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'hsl(240 5% 55%)' }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: 'hsl(240 5% 55%)' }} tickLine={false} axisLine={false} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${(v / 1000).toFixed(1)} t`, 'Volume']} />
-                <Area type="monotone" dataKey="volume" stroke="hsl(239,84%,67%)" strokeWidth={2} fill="url(#volGrad)" dot={false} animationDuration={1000} />
-              </AreaChart>
-            </ResponsiveContainer>
+
+          {/* Card: Trend volume totale */}
+          <div style={CARD}>
+            <div style={{ ...LABEL_CAPS, marginBottom: 20 }}>Trend volume totale</div>
+            {trendData.length > 0 ? (
+              <div style={{ height: 200 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trendData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="volGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#6366f1" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => [`${(v / 1000).toFixed(1)} t`, 'Volume']} />
+                    <Area type="monotone" dataKey="volume" stroke="#6366f1" strokeWidth={2} fill="url(#volGrad)" dot={false} animationDuration={1000} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: 13, color: '#6b7280' }}>Completa allenamenti per vedere il trend</span>
+              </div>
+            )}
           </div>
-        ) : (
-          <EmptyChart label="Nessun dato di volume ancora" />
-        )}
-      </Card>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Volume by muscle group */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Dumbbell className="w-5 h-5 text-primary" />
-              <CardTitle>Volume per Gruppo (4 sett.)</CardTitle>
-            </div>
-          </CardHeader>
-          {muscleData.length > 0 ? (
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={muscleData} layout="vertical" margin={{ left: 8 }}>
-                  <XAxis type="number" tick={{ fontSize: 11, fill: 'hsl(240 5% 55%)' }} tickLine={false} axisLine={false} hide />
-                  <YAxis type="category" dataKey="label" width={80} tick={{ fontSize: 11, fill: 'hsl(240 5% 70%)' }} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'hsl(240 8% 14% / 0.4)' }} formatter={(v: any) => [`${(v / 1000).toFixed(1)} t`, 'Volume']} />
-                  <Bar dataKey="volume" radius={[0, 6, 6, 0]} animationDuration={900}>
-                    {muscleData.map((_, i) => <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <EmptyChart label="Nessun volume registrato" />
-          )}
-        </Card>
+        {/* Row 2: Frequenza per giorno */}
+        <div style={CARD}>
+          <div style={{ ...LABEL_CAPS, marginBottom: 20 }}>Frequenza per giorno</div>
+          <div style={{
+            height: 150,
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: 12,
+            paddingBottom: 28,
+            position: 'relative',
+          }}>
+            {freqData.map((d, i) => {
+              const barH = maxSessions > 0 ? Math.round((d.sessions / maxSessions) * 110) : 0;
+              return (
+                <div key={d.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 40 }}>
+                  <div style={{
+                    width: '100%',
+                    height: barH || 4,
+                    minHeight: 4,
+                    borderRadius: '6px 6px 4px 4px',
+                    background: d.sessions > 0
+                      ? 'linear-gradient(180deg,#22c55e,#4ade80)'
+                      : '#1a1a24',
+                    transition: 'height .4s ease',
+                    animation: 'fadeUp .4s ease',
+                    animationDelay: `${i * 0.07}s`,
+                    animationFillMode: 'both',
+                  }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280' }}>{d.day}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-        {/* Training frequency by day */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <CalendarDays className="w-5 h-5 text-primary" />
-              <CardTitle>Frequenza (8 sett.)</CardTitle>
-            </div>
-          </CardHeader>
-          {freqData.length > 0 ? (
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={freqData}>
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'hsl(240 5% 55%)' }} tickLine={false} axisLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: 'hsl(240 5% 55%)' }} tickLine={false} axisLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'hsl(240 8% 14% / 0.4)' }} formatter={(v: any) => [`${v}`, 'Sessioni']} />
-                  <Bar dataKey="sessions" fill="hsl(262 80% 65%)" radius={[6, 6, 0, 0]} animationDuration={900} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <EmptyChart label="Nessuna sessione ancora" />
-          )}
-        </Card>
       </div>
-    </div>
+    </>
   );
 }

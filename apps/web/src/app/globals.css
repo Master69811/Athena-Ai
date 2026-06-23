@@ -5,7 +5,7 @@
 @layer base {
   :root {
     --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
+    --foreground: 0 0% 91%;
     --surface: 240 10% 7%;
     --surface-elevated: 240 10% 10%;
     --border: 240 8% 14%;
@@ -53,11 +53,29 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Custom scrollbar */
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { @apply bg-transparent; }
-  ::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #1e1e2e; border-radius: 8px; border: 2px solid #09090f; }
+  ::-webkit-scrollbar-thumb:hover { background: #2a2a3a; }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: #1e1e2e;
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #6366f1;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(99,102,241,.6);
+  }
 }
 
 @layer components {
@@ -70,8 +88,10 @@
   }
 
   .gradient-text {
-    @apply bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent;
-    background-size: 200% auto;
+    background: linear-gradient(135deg, #a5b4fc, #c4b5fd);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
   }
 
   .glow-border {
@@ -79,13 +99,14 @@
   }
 
   .metric-card {
-    @apply glass-card p-5 transition-all duration-300 hover:glow-border;
+    @apply bg-[#111118] border border-[#1e1e2e] rounded-2xl p-5 transition-all duration-200 hover:-translate-y-1;
   }
 
   .btn-primary {
-    @apply bg-primary text-primary-foreground font-semibold px-6 py-3 rounded-xl
-           transition-all duration-200 hover:opacity-90 active:scale-95
-           disabled:opacity-50 disabled:cursor-not-allowed;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    @apply text-white font-bold px-6 py-3 rounded-xl transition-all duration-200
+           hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+    box-shadow: 0 10px 30px rgba(99,102,241,.35);
   }
 
   .btn-ghost {
@@ -98,6 +119,21 @@
            text-foreground placeholder:text-muted-foreground
            focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary
            transition-all duration-200;
+  }
+
+  .card-athena {
+    background: #111118;
+    border: 1px solid #1e1e2e;
+    border-radius: 20px;
+    padding: 24px;
+  }
+
+  .label-caps {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    color: #6b7280;
+    text-transform: uppercase;
   }
 }
 
@@ -125,6 +161,10 @@
     background-size: 200% 200%;
     animation: gradient-x 4s ease infinite;
   }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @keyframes shake {
@@ -141,3 +181,41 @@
   0%, 100% { background-position: 0% 50%; }
   50%       { background-position: 100% 50%; }
 }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes logoPulse {
+  0%,100% { box-shadow: 0 0 16px rgba(99,102,241,.55), 0 0 0 0 rgba(99,102,241,.45); }
+  50%      { box-shadow: 0 0 26px rgba(99,102,241,.9), 0 0 0 7px rgba(99,102,241,0); }
+}
+
+@keyframes barGrow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes flowDash {
+  to { stroke-dashoffset: -24; }
+}
+
+@keyframes floatNode {
+  0%,100% { opacity: .35; }
+  50%      { opacity: .9; }
+}
+
+@keyframes pulseGlow {
+  0%,100% { box-shadow: 0 0 0 0 rgba(99,102,241,.4); }
+  50%      { box-shadow: 0 0 0 8px rgba(99,102,241,0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.animate-fade-up { animation: fadeUp .4s ease both; }
+.animate-logo-pulse { animation: logoPulse 2.6s ease-in-out infinite; }
+.animate-pulse-glow { animation: pulseGlow 2s ease-in-out infinite; }
