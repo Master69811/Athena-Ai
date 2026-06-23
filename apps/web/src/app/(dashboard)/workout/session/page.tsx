@@ -60,7 +60,7 @@ export default function SessionPage() {
     queryKey: ['recovery-readiness'],
     queryFn: async () => {
       const res = await recoveryApi.getReadiness() as any;
-      return res.data as { hasData: boolean; score: number; adaptation: ReadinessAdaptation };
+      return (res as { hasData: boolean; score: number; adaptation: ReadinessAdaptation }) ?? null;
     },
     staleTime: 5 * 60_000,
   });

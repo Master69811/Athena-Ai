@@ -128,7 +128,7 @@ export default function DashboardPage() {
     queryKey: ['recovery-readiness'],
     queryFn: async () => {
       const res = await recoveryApi.getReadiness() as any;
-      return res.data as Readiness;
+      return (res as Readiness) ?? null;
     },
     staleTime: 5 * 60_000,
   });
