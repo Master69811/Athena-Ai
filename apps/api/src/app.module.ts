@@ -22,6 +22,7 @@ import { BodyWeightEngineModule } from './modules/body-weight-engine/body-weight
 import { NutritionEngineModule } from './modules/nutrition-engine/nutrition-engine.module';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { HealthModule } from './modules/health/health.module';
+import { RagModule } from './modules/rag/rag.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { HealthModule } from './modules/health/health.module';
     ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,
+    RagModule,
     AuthModule,
     UsersModule,
     ExercisesModule,

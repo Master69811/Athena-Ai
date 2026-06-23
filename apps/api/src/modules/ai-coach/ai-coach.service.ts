@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { ATHENA_TOOLS, executeAthenaFunction } from './ai-coach.tools';
+import { RagService } from '../rag/rag.service';
 
 // ── Zod schema for structured workout plan generation ──────────────────────────
 const ExerciseSchema = z.object({
@@ -63,7 +64,11 @@ function sanitizeInput(message: string): void {
 export class AiCoachService {
   private genAI: GoogleGenerativeAI;
 
-  constructor(private prisma: PrismaService, private configService: ConfigService) {
+  constructor(
+    private prisma: PrismaService,
+    private configService: ConfigService,
+    private ragService: RagService,
+  ) {
     this.genAI = new GoogleGenerativeAI(this.configService.get('GEMINI_API_KEY', ''));
   }
 
@@ -83,7 +88,7 @@ export class AiCoachService {
     return { tdee, protein, carbs, fat };
   }
 
-  private async buildSystemPrompt(userId: string): Promise<string> {
+  private async buildSystemPrompt(userId: string, knowledgeChunks: import('../rag/rag.service').KnowledgeChunk[] = []): Promise<string> {
     const [profile, activePlan, latestRecovery, recentSessions] = await Promise.all([
       this.prisma.userProfile.findUnique({ where: { userId } }),
       this.prisma.workoutPlan.findFirst({
@@ -159,6 +164,16 @@ Se l'utente chiede un programma e mancano dati critici, NON generare nulla. Chie
 - Se recovery score < 60/100 o aderenza < 80%: riduci volume, non intensità.
 - Ogni 4 settimane: valuta i progressi su peso corporeo, misurazioni e carichi.
 
+## KNOWLEDGE BASE — PROTOCOLLO PROJECT INVICTUS
+${
+  knowledgeChunks.length > 0
+    ? `Le seguenti sezioni sono estratte dai materiali ufficiali del protocollo. Usale come riferimento primario per rispondere con precisione. Se la risposta è nei materiali, citane i principi esplicitamente.\n\n` +
+      knowledgeChunks
+        .map((c, i) => `### [Fonte ${i + 1}: ${c.source} — ${c.category}]\n${c.text}`)
+        .join('\n\n')
+    : 'Nessun documento tecnico rilevante trovato per questa domanda. Rispondi basandoti sul tuo system prompt e sui dati utente.'
+}
+
 ## REGOLE DI COMPORTAMENTO
 1. **OBIETTIVI IRREALISTICI**: spiega i tempi fisiologici di adattamento con dati. Es: "Il massimo di muscolo nativo acquisibile è ~0.5–1 kg/mese in un principiante in superavit calorico ottimale." Non assecondare mai richieste impossibili.
 2. **DATI MANCANTI**: non generare piani senza aver completato la Fase A. Preferisci fare una domanda alla volta se l'utente è restio.
@@ -195,7 +210,9 @@ Se l'utente chiede un programma e mancano dati critici, NON generare nulla. Chie
       take: 30,
     });
 
-    const systemPrompt = await this.buildSystemPrompt(userId);
+    // RAG: retrieve relevant knowledge chunks before building the prompt
+    const knowledgeChunks = await this.ragService.retrieve(message);
+    const systemPrompt = await this.buildSystemPrompt(userId, knowledgeChunks);
     const modelName = this.configService.get('GEMINI_MODEL', 'gemini-2.0-flash');
 
     const model = this.genAI.getGenerativeModel({
