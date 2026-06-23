@@ -35,6 +35,17 @@ export class AiCoachController {
     return this.aiCoachService.getConversation(userId, id);
   }
 
+  @Post('generate-plan')
+  @SetMetadata(AI_TYPE_KEY, 'plan')
+  @UseGuards(AiRateLimitGuard)
+  @ApiOperation({ summary: 'Generate a Zod-validated structured workout plan (JSON)' })
+  async generatePlan(
+    @CurrentUser('id') userId: string,
+    @Body() body: { request: string },
+  ) {
+    return this.aiCoachService.generateStructuredPlan(userId, body.request);
+  }
+
   @Get('suggestions')
   @ApiOperation({ summary: 'Get suggested questions' })
   async getSuggestions(@CurrentUser() user: any) {

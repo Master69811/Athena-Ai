@@ -1,7 +1,63 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
+import { ATHENA_TOOLS, executeAthenaFunction } from './ai-coach.tools';
+
+// ── Zod schema for structured workout plan generation ──────────────────────────
+const ExerciseSchema = z.object({
+  nome: z.string(),
+  muscoli_target: z.array(z.string()),
+  serie: z.number().int().min(1).max(10),
+  ripetizioni: z.string(),         // e.g. "6-8" or "12"
+  rpe_target: z.number().min(5).max(10),
+  rir_target: z.number().min(0).max(5),
+  note_tecnica: z.string(),
+  progressione: z.string(),        // e.g. "+2.5kg/settimana"
+});
+
+const WorkoutDaySchema = z.object({
+  nome_giorno: z.string(),
+  tipo: z.enum(['Push', 'Pull', 'Legs', 'Upper', 'Lower', 'Full Body', 'Recupero Attivo']),
+  esercizi: z.array(ExerciseSchema),
+});
+
+export const WorkoutPlanSchema = z.object({
+  nome_piano: z.string(),
+  metodologia: z.literal('Project Invictus'),
+  durata_settimane: z.number().int().min(4).max(16),
+  obiettivo: z.string(),
+  giorni_settimana: z.array(WorkoutDaySchema),
+  note_periodizzazione: z.string(),
+  deload_settimana: z.number().int(),
+});
+
+export type WorkoutPlanStructured = z.infer<typeof WorkoutPlanSchema>;
+
+/** Reject messages with clearly impossible physiological claims before hitting the LLM. */
+const IMPOSSIBLE_PATTERNS = [
+  { re: /(\d{3,})\s*kg\s*(di\s*)?(panca|squat|stacco|bench|deadlift)/i, limit: 300, label: 'carico' },
+  { re: /perdo\s*(\d+)\s*kg\s*(in|a)\s*(una\s*)?(settimana|week)/i, limit: 3, label: 'perdita di peso' },
+  { re: /guadagno\s*(\d+)\s*kg\s*di\s*muscolo\s*(in|a)\s*(un\s*)?(mese|month)/i, limit: 4, label: 'massa muscolare' },
+];
+
+function sanitizeInput(message: string): void {
+  if (!message || typeof message !== 'string') throw new BadRequestException('Messaggio non valido.');
+  if (message.length > 2000) throw new BadRequestException('Messaggio troppo lungo (max 2000 caratteri).');
+  for (const { re, limit, label } of IMPOSSIBLE_PATTERNS) {
+    const m = message.match(re);
+    if (m) {
+      const val = parseFloat(m[1]);
+      if (val > limit) {
+        throw new BadRequestException(
+          `Valore impossibile rilevato per "${label}": ${val}. ` +
+          `Athena non può elaborare richieste con dati fisiologicamente irrealizzabili.`,
+        );
+      }
+    }
+  }
+}
 
 @Injectable()
 export class AiCoachService {
@@ -113,6 +169,9 @@ Se l'utente chiede un programma e mancano dati critici, NON generare nulla. Chie
   }
 
   async chat(userId: string, conversationId: string | undefined, message: string) {
+    // Guardrail: reject impossible physiological claims before hitting the LLM
+    sanitizeInput(message);
+
     let conversation = conversationId
       ? await this.prisma.aIConversation.findFirst({ where: { id: conversationId, userId } })
       : null;
@@ -127,11 +186,7 @@ Se l'utente chiede un programma e mancano dati critici, NON generare nulla. Chie
     }
 
     await this.prisma.aIMessage.create({
-      data: {
-        conversationId: conversation.id,
-        role: 'USER',
-        content: message,
-      },
+      data: { conversationId: conversation.id, role: 'USER', content: message },
     });
 
     const previousMessages = await this.prisma.aIMessage.findMany({
@@ -146,11 +201,11 @@ Se l'utente chiede un programma e mancano dati critici, NON generare nulla. Chie
     const model = this.genAI.getGenerativeModel({
       model: modelName,
       systemInstruction: systemPrompt,
+      tools: ATHENA_TOOLS,
       // Lower temperature = more consistent, evidence-based answers (less creative drift)
       generationConfig: { maxOutputTokens: 4096, temperature: 0.6 },
     });
 
-    // Build history: all messages except the current user message (last item)
     const filteredMessages = previousMessages.filter(m => m.role !== 'SYSTEM');
     const history = filteredMessages.slice(0, -1).map(m => ({
       role: m.role === 'USER' ? ('user' as const) : ('model' as const),
@@ -158,24 +213,66 @@ Se l'utente chiede un programma e mancano dati critici, NON generare nulla. Chie
     }));
 
     const chat = model.startChat({ history });
-    const result = await chat.sendMessage(message);
+    let result = await chat.sendMessage(message);
+
+    // Agentic tool-call loop: Athena can call internal functions for precise data
+    let totalTokens = 0;
+    let iterations = 0;
+    while (result.response.functionCalls()?.length && iterations < 5) {
+      iterations++;
+      const calls = result.response.functionCalls()!;
+      const toolResponses = await Promise.all(
+        calls.map(async (call) => ({
+          functionResponse: {
+            name: call.name,
+            response: await executeAthenaFunction(call.name, call.args as Record<string, any>, userId, this.prisma),
+          },
+        })),
+      );
+      result = await chat.sendMessage(toolResponses as any);
+      totalTokens += result.response.usageMetadata?.candidatesTokenCount ?? 0;
+    }
+
     const aiText = result.response.text();
-    const outputTokens = result.response.usageMetadata?.candidatesTokenCount ?? 0;
+    totalTokens += result.response.usageMetadata?.candidatesTokenCount ?? 0;
 
     const aiMessage = await this.prisma.aIMessage.create({
       data: {
         conversationId: conversation.id,
         role: 'ASSISTANT',
         content: aiText,
-        tokens: outputTokens,
+        tokens: totalTokens,
       },
     });
 
     return {
       conversationId: conversation.id,
       message: aiMessage,
-      usage: { output_tokens: outputTokens },
+      usage: { output_tokens: totalTokens },
     };
+  }
+
+  /** Generate a Zod-validated structured workout plan — guaranteed parseable JSON. */
+  async generateStructuredPlan(userId: string, request: string): Promise<WorkoutPlanStructured> {
+    sanitizeInput(request);
+    const systemPrompt = await this.buildSystemPrompt(userId);
+    const modelName = this.configService.get('GEMINI_MODEL', 'gemini-2.0-flash');
+    const model = this.genAI.getGenerativeModel({
+      model: modelName,
+      systemInstruction:
+        systemPrompt +
+        '\n\nRISPONDI ESCLUSIVAMENTE con un oggetto JSON valido che rispetti questo schema:\n' +
+        JSON.stringify(WorkoutPlanSchema.shape, null, 2) +
+        '\nNessun testo prima o dopo il JSON. Nessun markdown fence (```json).',
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.4, responseMimeType: 'application/json' },
+    });
+    const result = await model.generateContent(request);
+    const raw = result.response.text().trim();
+    const parsed = WorkoutPlanSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) {
+      throw new BadRequestException('Il piano generato non rispetta lo schema. Riprova.');
+    }
+    return parsed.data;
   }
 
   async getConversations(userId: string) {
