@@ -198,7 +198,8 @@ export default function RecoveryPage() {
     select: (res: any) => (Array.isArray(res.data) ? res.data : []) as Array<{ date: string; score: number }>,
   });
 
-  /* use API data or fallback */
+  /* real data present? — otherwise show neutral placeholders, not fabricated numbers */
+  const hasData = !!latest;
   const rec = latest ?? FALLBACK;
   const score        = Math.round(rec.score ?? FALLBACK.score);
   const sleepHours   = rec.sleepHours   ?? FALLBACK.sleepHours;
@@ -237,7 +238,7 @@ export default function RecoveryPage() {
           }}>
             <CapLabel mb={18}>Recovery Score</CapLabel>
 
-            <RecoveryRing score={score} />
+            <RecoveryRing score={hasData ? score : 0} />
 
             <div style={{ marginTop: 20, width: '100%' }}>
               <button
@@ -260,7 +261,7 @@ export default function RecoveryPage() {
 
             {!latest && (
               <p style={{ fontSize: 11, color: '#6b7280', marginTop: 10 }}>
-                Dati di esempio — registra il tuo recupero
+                Nessun dato ancora — registra il tuo primo recupero
               </p>
             )}
           </div>
@@ -279,28 +280,28 @@ export default function RecoveryPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
                 <FactorTile
                   label="Sonno"
-                  value={`${sleepHours}h`}
-                  color={sleepColor}
+                  value={hasData ? `${sleepHours}h` : '—'}
+                  color={hasData ? sleepColor : '#3a3a48'}
                 />
                 <FactorTile
                   label="Qualità"
-                  value={`${sleepQuality}/10`}
-                  color={qualColor}
+                  value={hasData ? `${sleepQuality}/10` : '—'}
+                  color={hasData ? qualColor : '#3a3a48'}
                 />
                 <FactorTile
                   label="Stress"
-                  value={`${stressLevel}/10`}
-                  color={stressColor}
+                  value={hasData ? `${stressLevel}/10` : '—'}
+                  color={hasData ? stressColor : '#3a3a48'}
                 />
                 <FactorTile
                   label="Energia"
-                  value={`${energyLevel}/10`}
-                  color={energyColor}
+                  value={hasData ? `${energyLevel}/10` : '—'}
+                  color={hasData ? energyColor : '#3a3a48'}
                 />
                 <FactorTile
                   label="Passi"
-                  value={steps >= 1000 ? `${(steps / 1000).toFixed(1)}k` : String(steps)}
-                  color={steps >= 8000 ? '#22c55e' : steps >= 5000 ? '#f59e0b' : '#ef4444'}
+                  value={hasData ? (steps >= 1000 ? `${(steps / 1000).toFixed(1)}k` : String(steps)) : '—'}
+                  color={hasData ? (steps >= 8000 ? '#22c55e' : steps >= 5000 ? '#f59e0b' : '#ef4444') : '#3a3a48'}
                 />
               </div>
             </div>
