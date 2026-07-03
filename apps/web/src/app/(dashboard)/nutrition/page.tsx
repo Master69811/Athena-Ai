@@ -274,7 +274,7 @@ export default function NutritionPage() {
       <div style={{ maxWidth: 1180, animation: 'fadeUp .4s ease' }}>
         {planLoading ? (
           /* skeleton */
-          <div style={{
+          <div className="resp-stack" style={{
             display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20,
           }}>
             {[0, 1].map(i => (
@@ -288,7 +288,7 @@ export default function NutritionPage() {
         ) : !plan ? (
           <NoPlanState onGenerate={() => generateMutation.mutate()} loading={generateMutation.isPending} />
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20 }}>
+          <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20 }}>
 
             {/* ── LEFT COLUMN ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

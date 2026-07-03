@@ -175,7 +175,7 @@ export default function SettingsPage() {
               Modifica
             </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <ProfileField label="Nome"             value={profile?.name ?? user?.profile?.name} />
             <ProfileField label="Email"            value={user?.email} />
             <ProfileField label="Età"              value={profile?.age ? `${profile.age} anni` : undefined} />
@@ -203,7 +203,7 @@ export default function SettingsPage() {
           padding: 24,
         }}>
           <CapLabel>Abbonamento</CapLabel>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
             {/* FREE tile */}
             <div style={{

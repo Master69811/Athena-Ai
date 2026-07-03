@@ -192,7 +192,7 @@ function DashboardSkeleton() {
           {[0,1,2,3].map(i => <Skeleton key={i} className="w-28 h-24 rounded-2xl" />)}
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 20 }}>
+      <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 20 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           <Skeleton className="h-56 rounded-2xl" />
           <Skeleton className="h-44 rounded-2xl" />
@@ -396,7 +396,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Two-column grid ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 20 }}>
+      <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 20 }}>
 
         {/* ──── Left column ──── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -562,7 +562,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Volume + Sessioni */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div className="card-athena" style={{ padding: 20 }}>
               <div className="label-caps" style={{ marginBottom: 10 }}>Volume settimana</div>
               <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: -1, color: '#e7e7ee' }}>

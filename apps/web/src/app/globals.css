@@ -219,3 +219,11 @@
 .animate-fade-up { animation: fadeUp .4s ease both; }
 .animate-logo-pulse { animation: logoPulse 2.6s ease-in-out infinite; }
 .animate-pulse-glow { animation: pulseGlow 2s ease-in-out infinite; }
+
+/* ─── Responsive grid overrides (mobile ≤767px) ─────────────────
+   Inline styles set the desktop grid; these !important rules win
+   only on phones so fixed columns collapse instead of overflowing. */
+@media (max-width: 767px) {
+  .resp-stack { grid-template-columns: 1fr !important; }
+  .resp-tiles { grid-template-columns: repeat(2, 1fr) !important; }
+}

@@ -131,7 +131,7 @@ export default function ProgressPage() {
       <div style={{ maxWidth: 1180, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* Row 1: two area charts */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
           {/* Card: Peso corporeo */}
           <div style={CARD}>
@@ -238,7 +238,7 @@ export default function ProgressPage() {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14 }}>
+          <div className="resp-tiles" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14 }}>
             {measurementsFallback.map(m => (
               <div key={m.label} style={INNER_SURFACE}>
                 <div style={{ ...LABEL_CAPS, marginBottom: 6 }}>{m.label}</div>

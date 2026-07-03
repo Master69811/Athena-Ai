@@ -221,7 +221,7 @@ export default function RecoveryPage() {
       <style>{STYLES}</style>
 
       <div style={{ maxWidth: 1180, animation: 'fadeUp .4s ease' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20 }}>
+        <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20 }}>
 
           {/* ── LEFT: Recovery Score ── */}
           <div style={{
@@ -277,7 +277,7 @@ export default function RecoveryPage() {
               padding: 24,
             }}>
               <CapLabel mb={18}>Fattori di oggi</CapLabel>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
+              <div className="resp-tiles" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
                 <FactorTile
                   label="Sonno"
                   value={hasData ? `${sleepHours}h` : '—'}

@@ -188,7 +188,7 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Row 1 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
           {/* Card: Volume per gruppo muscolare */}
           <div style={CARD}>

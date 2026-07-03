@@ -371,7 +371,7 @@ export default function SessionPage() {
               </div>
 
               {/* Steppers grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 20 }}>
+              <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 20 }}>
                 {/* Weight */}
                 <div style={{
                   background: '#15151d', border: '1px solid #1e1e2e', borderRadius: 14, padding: 16, textAlign: 'center',
