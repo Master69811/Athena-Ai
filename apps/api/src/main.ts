@@ -53,6 +53,7 @@ async function bootstrap() {
       const allowed =
         allowedOrigins.includes(origin) ||
         /\.vercel\.app$/.test(origin) ||
+        /\.onrender\.com$/.test(origin) ||
         /\.railway\.app$/.test(origin);
       callback(allowed ? null : new Error('Not allowed by CORS'), allowed);
     },

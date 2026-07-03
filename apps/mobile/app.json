@@ -38,7 +38,7 @@
       ]
     ],
     "extra": {
-      "apiUrl": "https://CHANGE_ME.railway.app"
+      "apiUrl": "https://CHANGE_ME.onrender.com"
     }
   }
 }

@@ -24,6 +24,7 @@ export class RagService implements OnModuleInit {
   constructor(private config: ConfigService) {
     this.qdrant = new QdrantClient({
       url: config.get('QDRANT_URL', 'http://localhost:6333'),
+      apiKey: config.get('QDRANT_API_KEY') || undefined,
     });
     this.genAI = new GoogleGenerativeAI(config.get('GEMINI_API_KEY', ''));
   }

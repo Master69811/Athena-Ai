@@ -48,7 +48,7 @@ pnpm dev
 - Swagger: http://localhost:3001/docs
 
 Per la guida completa → [docs/INSTALL.md](docs/INSTALL.md)  
-Per il deploy in produzione → [docs/DEPLOY.md](docs/DEPLOY.md)
+Per il deploy in produzione → [docs/DEPLOY_FULLSTACK.md](docs/DEPLOY_FULLSTACK.md)
 
 ## Moduli AI implementati
 
@@ -92,7 +92,7 @@ pnpm db:studio                     # Prisma Studio
 | Documento | Contenuto |
 |---|---|
 | [docs/INSTALL.md](docs/INSTALL.md) | Installazione locale step-by-step |
-| [docs/DEPLOY.md](docs/DEPLOY.md) | Deploy produzione completo |
+| [docs/DEPLOY_FULLSTACK.md](docs/DEPLOY_FULLSTACK.md) | Deploy produzione completo |
 | [docs/UPDATE.md](docs/UPDATE.md) | Aggiornamento versioni e migrazioni |
 | [docs/BACKUP.md](docs/BACKUP.md) | Backup e restore database |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Diagnosi problemi comuni |
