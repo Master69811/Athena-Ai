@@ -10,7 +10,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
     () => new QueryClient({
       defaultOptions: {
         queries: {
-          staleTime: 60 * 1000,
+          staleTime: 5 * 60 * 1000, // 5min: dashboard data (workouts, recovery) stable enough
+          gcTime: 10 * 60 * 1000,   // 10min: keep unused queries cached
+          retry: (failureCount, error: any) => {
+            // Don't retry 401/403/404, retry others with backoff
+            if (error?.status === 401 || error?.status === 403 || error?.status === 404) return false;
+            return failureCount < 2; // Max 2 retries
+          },
+          retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Backoff: 1s, 2s, 4s...
+          refetchOnWindowFocus: false, // No aggressive refetch, rely on stale time
+          refetchOnReconnect: true,    // Refetch when reconnecting to network
+        },
+        mutations: {
           retry: 1,
         },
       },
