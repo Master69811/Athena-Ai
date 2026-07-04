@@ -1,17 +1,23 @@
-import { Injectable, UnauthorizedException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, ConflictException, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RateLimitService } from '../../common/services/rate-limit.service';
+import { TokenBlacklistService } from '../../common/services/token-blacklist.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    private rateLimitService: RateLimitService,
+    private tokenBlacklistService: TokenBlacklistService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -38,18 +44,31 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
+    const identifier = dto.email;
+    const { allowed } = await this.rateLimitService.checkLoginAttempt(identifier);
+
+    if (!allowed) {
+      this.logger.warn(`Login rate limit exceeded for ${identifier}`);
+      throw new HttpException('Too many failed login attempts. Try again later.', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
       include: { profile: true },
     });
 
-    if (!user || !user.passwordHash) throw new UnauthorizedException('Invalid credentials');
+    if (!user || !user.passwordHash) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     const passwordMatch = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!passwordMatch) throw new UnauthorizedException('Invalid credentials');
+    if (!passwordMatch) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
 
     if (!user.isActive) throw new UnauthorizedException('Account is deactivated');
 
+    await this.rateLimitService.resetLoginAttempts(identifier);
     const tokens = await this.generateTokens(user.id, user.email);
     await this.storeRefreshToken(user.id, tokens.refreshToken);
 
@@ -69,8 +88,11 @@ export class AuthService {
     return tokens;
   }
 
-  async logout(userId: string) {
+  async logout(userId: string, token?: string) {
     await this.prisma.user.update({ where: { id: userId }, data: { refreshToken: null } });
+    if (token) {
+      await this.tokenBlacklistService.blacklistToken(token);
+    }
     return { message: 'Logged out successfully' };
   }
 

@@ -36,8 +36,9 @@ export class AuthController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout current user' })
-  async logout(@CurrentUser('id') userId: string) {
-    return this.authService.logout(userId);
+  async logout(@CurrentUser('id') userId: string, @Req() req: any) {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    return this.authService.logout(userId, token);
   }
 
   @Get('me')

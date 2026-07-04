@@ -23,12 +23,14 @@ import { NutritionEngineModule } from './modules/nutrition-engine/nutrition-engi
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { HealthModule } from './modules/health/health.module';
 import { RagModule } from './modules/rag/rag.module';
+import { CommonModule } from './common/common.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     ScheduleModule.forRoot(),
+    CommonModule,
     PrismaModule,
     HealthModule,
     RagModule,
