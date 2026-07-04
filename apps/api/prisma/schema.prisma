@@ -398,6 +398,7 @@ model WorkoutPlan {
   adjustments ProgramAdjustment[]
 
   @@index([userId])
+  @@index([userId, createdAt])
   @@map("workout_plans")
 }
 
@@ -415,6 +416,7 @@ model WorkoutDay {
   sessions  WorkoutSession[]
 
   @@index([planId])
+  @@index([planId, dayIndex])
   @@map("workout_days")
 }
 
@@ -439,6 +441,8 @@ model WorkoutExercise {
   adjustments ProgramAdjustment[]
 
   @@index([dayId])
+  @@index([dayId, exerciseId])
+  @@index([exerciseId])
   @@map("workout_exercises")
 }
 
@@ -734,6 +738,7 @@ model RecoveryLog {
 
   @@unique([userId, date])
   @@index([userId])
+  @@index([userId, createdAt])
   @@map("recovery_logs")
 }
 
