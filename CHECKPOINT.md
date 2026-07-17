@@ -35,7 +35,27 @@ DATABASE_URL, FRONTEND_URL=https://athena-ai-api.vercel.app, JWT_SECRET, JWT_REF
 - `CHECKPOINT.md` — questo file (nota: prima versione conteneva un secret Gemini per errore, bloccato da GitHub push protection, corretto con `git commit --amend` prima del push riuscito)
 - Test: 84/84 API + 51/51 web passano. Build: nest build OK. tsc --noEmit pulito su onboarding page.
 - **CONFERMATO IN PRODUZIONE (17/07 16:52 UTC)**: redeploy completato, test end-to-end ripetuto. Ora l'errore è pulito: HTTP 503 "Generazione del piano AI temporaneamente non disponibile" (prima era 500 opaco). Il messaggio client NON rivela la causa reale per sicurezza — serve leggere i log Render (`[AiWorkoutService] ERROR ...`) per vedere l'errore Gemini preciso (probabile: formato chiave non valido — vedi nota sopra su formato `AQ.` vs `AIzaSy...`, oppure nome modello errato, oppure quota).
-- **IN CORSO**: lanciato Workflow multi-agente (6 esperti paralleli/pipeline) per: (1) diagnosticare bug "torna a inizio onboarding, richiede re-inserimento nome" riportato dall'utente — probabile causa: /onboarding non ha guardia per utenti già onboardingCompleted=true che ci ritornano, quindi vedono form vuoto; (2) trovare causa esatta 503 su ai-workout/generate; (3) sweep QA su workout/nutrition/recovery/progress/coach/settings/achievements per bug residui. Workflow task ID: wj4thw0ur — attendere notifica completamento, poi leggere risultati e applicare fix con altri sotto-agenti mirati, testare, buildare, committare, pushare.
+## ✅ Commit 9: `c3ce4a9` — 3 FIX CRITICI, PUSHATO
+1. **Causa esatta del bug onboarding**: store zustand (`auth.store.ts`) mai aggiornato dopo onboarding → AppLayout rimandava sempre a /onboarding vuoto. Fix: `onboarding/page.tsx` chiama `setUser()` con profilo aggiornato subito dopo il successo.
+2. **Sicurezza — rotazione refresh token rotta**: bcrypt tronca a 72 byte, prefisso JWT fisso ≥72 byte → QUALSIASI refresh token mai emesso restava valido per sempre. Fix: hash SHA-256 prima di bcrypt + verifica crittografica esplicita con `jwtService.verifyAsync`.
+3. **Causa esatta 503 su generazione AI**: `GEMINI_MODEL` default `gemini-2.0-flash`, ritirato da Google il 1 giugno 2026. Fix: aggiornato a `gemini-2.5-flash` in tutti i file + .env.example.
+   ⚠️ **AZIONE UTENTE RICHIESTA**: se `GEMINI_MODEL` è impostato esplicitamente su Render (sovrascrive il default nel codice), va aggiornato manualmente a `gemini-2.5-flash` lì.
+
+## ✅ Commit 10: `e3fa5e0` — 9 fix aggiuntivi da sweep QA, PUSHATO
+- Guardia "già onboarded" su mount pagina onboarding (redirect a /dashboard)
+- Cookie `athena_session` ora pulito anche su refresh fallito (evitava loop di redirect fino a 7 giorni)
+- `completeOnboarding` ora idempotente (no-op se già completato)
+- Pagina Recupero: rimossi dati finti per utenti nuovi (bug `hasData` sempre true)
+- Vincolo unicità `(userId, date)` su BodyMeasurement + upsert (nuova migrazione `20260717170000`)
+- Nutrizione: invalidazione cache dopo rigenerazione piano AI (target calorie/macro non più stantii)
+- 4 query di lettura (workout/nutrition/exercises/history) ora gestiscono errori distintamente da "nessun dato"
+- Ricerca esercizi debounced (era una richiesta per tasto)
+- Badge RPE workout corretto (leggeva campo sbagliato)
+- Chat coach: cronologia ripristinata al mount invece di azzerarsi ad ogni navigazione
+- Settings: campo body-fat % corretto (nome campo sbagliato), Bio ora si cancella correttamente
+- Achievements: distingue errore API da lista vuota
+
+**PROSSIMO STEP**: aspettare redeploy Render (~2-3 min), poi ripetere test end-to-end completo (registrazione → onboarding → generazione AI) per confermare tutti i fix in produzione. Se GEMINI_MODEL è impostato esplicitamente su Render, ricordare all'utente di aggiornarlo.
 
 ## ➡️ PROSSIMI PASSI (in ordine)
 1. **Test + build** dei 2 file sopra: `cd apps/api && pnpm exec jest --silent && pnpm exec nest build` per il backend; per il frontend verificare tsc/build Next.js
