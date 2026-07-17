@@ -65,14 +65,14 @@ export default function LoginPage() {
       >
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-primary/40">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-4">
             <Zap className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-3xl font-bold gradient-text mb-1">Athena AI</h1>
           <p className="text-muted-foreground">Il tuo coach di élite ti aspetta</p>
         </div>
 
-        <div className="glass-card-elevated p-8">
+        <div className="card p-8">
           <h2 className="text-xl font-bold mb-6">Accedi</h2>
 
           <form onSubmit={handleSubmit(onSubmit, shake)} className={`space-y-4 ${shaking ? 'animate-shake' : ''}`}>

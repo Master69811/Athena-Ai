@@ -3,12 +3,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { TrendingUp, Moon, Dumbbell } from 'lucide-react';
 import {
   usersApi, workoutApi, recoveryApi, nutritionApi,
   progressionApi, bodyWeightApi, nutritionEngineApi,
 } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { RecoveryModal } from '@/components/recovery/RecoveryModal';
+import { RecoveryRingPro, MacroBar } from '@/components/dashboard/DashboardSvgComponents';
 import { toast } from 'sonner';
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
 
@@ -29,100 +31,7 @@ type Readiness = {
   summary: string;
 };
 
-const READINESS_COLOR = { green: '#22c55e', yellow: '#eab308', orange: '#f97316', red: '#ef4444' };
-
-/* ─── SVG helpers ─── */
-function RecoveryRingPro({ score, size = 170, sw = 13 }: { score: number; size?: number; sw?: number }) {
-  const r = (size - sw) / 2;
-  const cx = size / 2;
-  const c = 2 * Math.PI * r;
-  const col = score <= 40 ? ['#ef4444', '#f87171'] : score <= 70 ? ['#eab308', '#fbbf24'] : ['#22c55e', '#5ee89a'];
-  const id = `ring-${size}`;
-  const ticks = Array.from({ length: 60 }, (_, i) => {
-    const a = (i / 60) * 2 * Math.PI;
-    const inner = r + sw / 2 + 4;
-    const outer = inner + (i % 5 === 0 ? 6 : 3);
-    return { x1: cx + Math.cos(a) * inner, y1: cx + Math.sin(a) * inner, x2: cx + Math.cos(a) * outer, y2: cx + Math.sin(a) * outer, major: i % 5 === 0 };
-  });
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <defs>
-        <linearGradient id={id + 'g'} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor={col[0]} />
-          <stop offset="100%" stopColor={col[1]} />
-        </linearGradient>
-        <filter id={id + 'f'} x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" result="b" />
-          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
-      </defs>
-      <g>
-        {ticks.map((t, i) => (
-          <line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke="#2a2a3a" strokeWidth={t.major ? 1.4 : 0.7} />
-        ))}
-      </g>
-      <g transform={`rotate(-90 ${cx} ${cx})`}>
-        <circle cx={cx} cy={cx} r={r} fill="none" stroke="#16161f" strokeWidth={sw} />
-        <circle cx={cx} cy={cx} r={r} fill="none" stroke={`url(#${id}g)`} strokeWidth={sw}
-          strokeLinecap="round" strokeDasharray={c}
-          strokeDashoffset={c * (1 - Math.max(0, Math.min(100, score)) / 100)}
-          filter={`url(#${id}f)`}
-          style={{ transition: 'stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)' }}
-        />
-      </g>
-    </svg>
-  );
-}
-
-function DonutRing({ pct, size = 190, sw = 15, color = '#6366f1' }: { pct: number; size?: number; sw?: number; color?: string }) {
-  const r = (size - sw) / 2;
-  const c = 2 * Math.PI * r;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#1a1a24" strokeWidth={sw} />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={sw}
-        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct)}
-        style={{ transition: 'stroke-dashoffset .8s ease' }}
-      />
-    </svg>
-  );
-}
-
-function EcgWave() {
-  const w = 420, h = 58, mid = h / 2;
-  let d = `M0 ${mid}`;
-  for (let s = 0; s < 5; s++) {
-    const x = s * 84;
-    d += ` L${x + 20} ${mid} L${x + 30} ${mid} L${x + 36} ${mid - 3} L${x + 42} ${mid + 22} L${x + 48} ${mid - 26} L${x + 54} ${mid + 6} L${x + 60} ${mid} L${x + 84} ${mid}`;
-  }
-  return (
-    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block', overflow: 'visible' }}>
-      <defs>
-        <linearGradient id="ecgg" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#6366f1" stopOpacity={0.1} />
-          <stop offset="50%" stopColor="#8b5cf6" />
-          <stop offset="100%" stopColor="#22c55e" />
-        </linearGradient>
-      </defs>
-      <path d={d} fill="none" stroke="url(#ecgg)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" opacity={0.85} />
-      <circle r={3.5} fill="#fff" style={{ filter: 'drop-shadow(0 0 5px #8b5cf6)' }}>
-        <animateMotion dur="3s" repeatCount="indefinite" path={d} rotate="0" />
-      </circle>
-    </svg>
-  );
-}
-
-function MacroBar({ pct, gradient }: { pct: number; gradient: string }) {
-  return (
-    <div style={{ height: 9, background: '#1a1a24', borderRadius: 6, overflow: 'hidden' }}>
-      <div style={{
-        width: `${Math.min(100, pct)}%`, height: '100%', borderRadius: 6,
-        background: gradient, transformOrigin: 'left',
-        animation: 'barGrow .9s cubic-bezier(.4,0,.2,1)',
-      }} />
-    </div>
-  );
-}
+const READINESS_COLOR = { green: 'hsl(var(--success))', yellow: '#eab308', orange: '#f97316', red: '#ef4444' };
 
 /* ─── Count-up hook ─── */
 function useCountUp(target: number, duration = 1200) {
@@ -143,12 +52,12 @@ function useCountUp(target: number, duration = 1200) {
 
 /* ─── Dashboard Skeleton ─── */
 function Skeleton({ className }: { className?: string }) {
-  return <div className={`animate-pulse bg-[#1a1a24] rounded-xl ${className}`} />;
+  return <div className={`animate-pulse bg-surface-3 rounded-2xl ${className}`} />;
 }
 
 function DashboardSkeleton() {
   return (
-    <div style={{ maxWidth: 1240, animation: 'fadeUp .4s ease' }}>
+    <div style={{ maxWidth: 1180, animation: 'fadeUp .4s ease' }}>
       <div style={{ display: 'flex', gap: 24, marginBottom: 22 }}>
         <div style={{ flex: 1 }}>
           <Skeleton className="h-9 w-64 mb-2" />
@@ -268,7 +177,7 @@ export default function DashboardPage() {
 
   const recoveryStatusColor = readiness?.hasData
     ? READINESS_COLOR[readiness.adaptation.color]
-    : recoveryScore >= 80 ? '#22c55e' : recoveryScore >= 60 ? '#eab308' : '#ef4444';
+    : recoveryScore >= 80 ? 'hsl(var(--success))' : recoveryScore >= 60 ? '#eab308' : '#ef4444';
 
   const recoveryTitle = readiness?.hasData ? readiness.adaptation.titleIt
     : recoveryScore >= 80 ? 'Pronto a spingere' : recoveryScore >= 60 ? 'Allenamento moderato' : 'Recupero necessario';
@@ -305,11 +214,7 @@ export default function DashboardPage() {
     : null;
 
   const decisions = (nutritionDecisions ?? []).slice(0, 3).map((d, i) => {
-    const icons = [
-      'M3 17l6-6 4 4 8-8 M21 7h-5 M21 7v5',
-      'M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z',
-      'M6.5 6.5v11 M17.5 6.5v11 M6.5 12h11',
-    ];
+    const icons = [TrendingUp, Moon, Dumbbell];
     return {
       icon: icons[i % icons.length],
       title: d.type === 'CALORIE_INCREASE' ? `Calorie · +${d.deltaCalories} kcal`
@@ -324,36 +229,27 @@ export default function DashboardPage() {
   if (dashboardLoading) return <DashboardSkeleton />;
 
   return (
-    <div style={{ maxWidth: 1240, animation: 'fadeUp .4s ease' }}>
+    <div style={{ maxWidth: 1180, animation: 'fadeUp .4s ease' }}>
 
       {/* ── Hero band ── */}
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 24, marginBottom: 22, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 280 }}>
-          <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-.9px', lineHeight: 1.05, color: '#e7e7ee' }}>
+          <div className="text-display">
             {greeting}, {userName}
           </div>
-          <div style={{ fontSize: 14, color: '#a1a1b5', marginTop: 6 }}>
+          <div style={{ fontSize: 14, color: 'hsl(var(--content-secondary))', marginTop: 6 }}>
             {dashboard?.aiInsightOfTheDay || 'Sei al massimo della forma — è il momento di spingere.'}
-          </div>
-          <div style={{ marginTop: 14, opacity: .9 }}>
-            <EcgWave />
           </div>
         </div>
 
         {/* Recovery score pill — the only "vital" the backend actually provides */}
         {hasRecoveryData && (
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <div
-              className="vital-pill"
-              style={{
-                background: '#111118', border: '1px solid #1e1e2e', borderRadius: 16,
-                padding: '14px 16px', minWidth: 112, transition: 'transform .2s, border-color .2s', cursor: 'default',
-              }}
-            >
-              <div style={{ fontSize: 10.5, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.1em' }}>Recovery</div>
+            <div className="card card-interactive" style={{ padding: '14px 16px', minWidth: 112, cursor: 'default' }}>
+              <div style={{ fontSize: 10.5, color: 'hsl(var(--content-tertiary))', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.1em' }}>Recovery</div>
               <div style={{ margin: '7px 0 9px', letterSpacing: '-.5px' }}>
-                <span style={{ fontSize: 23, fontWeight: 800, color: '#e7e7ee' }}>{recoveryScore}</span>
-                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}> / 100</span>
+                <span className="tabular-nums" style={{ fontSize: 23, fontWeight: 700, color: 'hsl(var(--foreground))' }}>{recoveryScore}</span>
+                <span style={{ fontSize: 12, color: 'hsl(var(--content-tertiary))', fontWeight: 600 }}> / 100</span>
               </div>
             </div>
           </div>
@@ -367,34 +263,26 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* Recovery card */}
-          <div
-            style={{
-              background: '#111118', border: `1px solid rgba(${recoveryScore >= 70 ? '34,197,94' : recoveryScore >= 40 ? '234,179,8' : '239,68,68'},.18)`,
-              borderRadius: 20, padding: 24,
-              boxShadow: `0 0 50px rgba(${recoveryScore >= 70 ? '34,197,94' : '234,179,8'},.12)`,
-              transition: 'transform .2s, box-shadow .2s',
-            }}
-            className="recovery-card"
-          >
+          <div className="card card-interactive">
             <div className="label-caps" style={{ marginBottom: 18 }}>Recovery di oggi</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 26 }}>
               <div style={{ position: 'relative', width: 170, height: 170, flexShrink: 0 }}>
                 <RecoveryRingPro score={recoveryScore} />
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ fontSize: 46, fontWeight: 800, lineHeight: 1, letterSpacing: -1, color: '#e7e7ee' }}>{recoveryDisplay}</div>
-                  <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, marginTop: 2 }}>/ 100</div>
+                  <div className="tabular-nums" style={{ fontSize: 46, fontWeight: 700, lineHeight: 1, letterSpacing: -1, color: 'hsl(var(--foreground))' }}>{recoveryDisplay}</div>
+                  <div style={{ fontSize: 11, color: 'hsl(var(--content-tertiary))', fontWeight: 600, marginTop: 2 }}>/ 100</div>
                 </div>
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 20, fontWeight: 700, color: recoveryStatusColor, marginBottom: 6 }}>{recoveryTitle}</div>
-                <div style={{ fontSize: 13.5, color: '#a1a1b5', lineHeight: 1.55, marginBottom: 16 }}>{recoveryDetail}</div>
+                <div style={{ fontSize: 13.5, color: 'hsl(var(--content-secondary))', lineHeight: 1.55, marginBottom: 16 }}>{recoveryDetail}</div>
                 {readiness?.hasData && readiness.adaptation.intensity !== 'full' && (
                   <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                    <span style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, background: '#1e1e2e', color: '#d1d5db', fontWeight: 600 }}>
+                    <span style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, background: 'hsl(var(--border))', color: 'hsl(var(--foreground))', fontWeight: 600 }}>
                       Volume {Math.round(readiness.adaptation.setMultiplier * 100)}%
                     </span>
                     {readiness.adaptation.rpeAdjustment !== 0 && (
-                      <span style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, background: '#1e1e2e', color: '#d1d5db', fontWeight: 600 }}>
+                      <span style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, background: 'hsl(var(--border))', color: 'hsl(var(--foreground))', fontWeight: 600 }}>
                         RPE {readiness.adaptation.rpeAdjustment > 0 ? '+' : ''}{readiness.adaptation.rpeAdjustment}
                       </span>
                     )}
@@ -402,11 +290,10 @@ export default function DashboardPage() {
                 )}
                 <button
                   onClick={() => setRecoveryOpen(true)}
-                  className="btn-outline-athena"
+                  className="btn-secondary"
                   style={{
-                    background: '#1a1a24', border: '1px solid #2a2a3a', color: '#e7e7ee',
-                    padding: '10px 16px', borderRadius: 11, fontSize: 13, fontWeight: 600,
-                    cursor: 'pointer', fontFamily: 'inherit', transition: 'border-color .15s',
+                    padding: '10px 16px', borderRadius: 12, fontSize: 13,
+                    cursor: 'pointer', fontFamily: 'inherit',
                   }}
                 >
                   Registra recupero
@@ -416,66 +303,66 @@ export default function DashboardPage() {
           </div>
 
           {/* Macro card */}
-          <div className="card-athena">
+          <div className="card card-interactive">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <div className="label-caps">Macro di oggi</div>
-              <div style={{ fontSize: 12, color: '#a1a1b5' }}>
-                <b style={{ color: '#e7e7ee' }}>{Math.round(kcalConsumed)}</b> / {kcalTarget ?? '—'} kcal
+              <div style={{ fontSize: 12, color: 'hsl(var(--content-secondary))' }}>
+                <b style={{ color: 'hsl(var(--foreground))' }}>{Math.round(kcalConsumed)}</b> / {kcalTarget ?? '—'} kcal
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {[
-                { name: 'Proteine', label: protLabel, pct: protPct, gradient: 'linear-gradient(90deg,#6366f1,#8b5cf6)' },
-                { name: 'Carboidrati', label: carbLabel, pct: carbPct, gradient: 'linear-gradient(90deg,#22c55e,#4ade80)' },
-                { name: 'Grassi', label: fatLabel, pct: fatPct, gradient: 'linear-gradient(90deg,#f59e0b,#fbbf24)' },
+                { name: 'Proteine', label: protLabel, pct: protPct, color: 'hsl(var(--primary))' },
+                { name: 'Carboidrati', label: carbLabel, pct: carbPct, color: 'hsl(var(--success))' },
+                { name: 'Grassi', label: fatLabel, pct: fatPct, color: 'hsl(var(--warning))' },
               ].map(m => (
                 <div key={m.name}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 7 }}>
-                    <span style={{ fontWeight: 600, color: '#e7e7ee' }}>{m.name}</span>
-                    <span style={{ color: '#a1a1b5' }}>{m.label}</span>
+                    <span style={{ fontWeight: 600, color: 'hsl(var(--foreground))' }}>{m.name}</span>
+                    <span style={{ color: 'hsl(var(--content-secondary))' }}>{m.label}</span>
                   </div>
-                  <MacroBar pct={m.pct * 100} gradient={m.gradient} />
+                  <MacroBar pct={m.pct * 100} color={m.color} />
                 </div>
               ))}
             </div>
           </div>
 
           {/* Decisioni di Athena */}
-          <div className="card-athena">
+          <div className="card card-interactive">
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 16 }}>
-              <div style={{
-                width: 24, height: 24, borderRadius: 7,
-                background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+              <div className="rounded-lg" style={{
+                width: 24, height: 24,
+                background: 'linear-gradient(135deg,#6366f1,hsl(var(--accent)))',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 800, color: '#fff',
+                fontSize: 12, fontWeight: 700, color: '#fff',
               }}>A</div>
               <div className="label-caps">Decisioni di Athena</div>
             </div>
             {decisions.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-                {decisions.map((d, i) => (
-                  <div key={i} style={{
-                    display: 'flex', gap: 13, padding: 14, borderRadius: 13,
-                    background: '#15151d', border: '1px solid #1e1e2e',
-                  }}>
-                    <div style={{
-                      width: 34, height: 34, flexShrink: 0, borderRadius: 9,
-                      background: 'rgba(99,102,241,.14)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                {decisions.map((d, i) => {
+                  const Icon = d.icon;
+                  return (
+                    <div key={i} style={{
+                      display: 'flex', gap: 13, padding: 14, borderRadius: 12,
+                      background: 'hsl(var(--surface-elevated))', border: '1px solid hsl(var(--border))',
                     }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        {d.icon.split(' M').map((seg, j) => <path key={j} d={j === 0 ? seg : 'M' + seg} />)}
-                      </svg>
+                      <div className="rounded-lg bg-primary/10 text-primary" style={{
+                        width: 32, height: 32, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <Icon size={16} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2, color: 'hsl(var(--foreground))' }}>{d.title}</div>
+                        <div style={{ fontSize: 12.5, color: 'hsl(var(--content-secondary))', lineHeight: 1.5 }}>{d.body}</div>
+                      </div>
                     </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2, color: '#e7e7ee' }}>{d.title}</div>
-                      <div style={{ fontSize: 12.5, color: '#a1a1b5', lineHeight: 1.5 }}>{d.body}</div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
-              <div style={{ fontSize: 13, color: '#6b7280', padding: '8px 2px' }}>
+              <div style={{ fontSize: 13, color: 'hsl(var(--content-tertiary))', padding: '8px 2px' }}>
                 Nessuna decisione disponibile al momento.
               </div>
             )}
@@ -486,17 +373,12 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* Prossimo allenamento */}
-          <div style={{
-            background: 'linear-gradient(135deg,#15131f,#111118)',
-            border: '1px solid rgba(99,102,241,.25)', borderRadius: 20, padding: 24,
-            position: 'relative', overflow: 'hidden', transition: 'transform .2s, box-shadow .2s',
-          }} className="workout-card">
-            <div style={{ position: 'absolute', top: -40, right: -40, width: 160, height: 160, background: 'radial-gradient(circle,rgba(99,102,241,.22),transparent 70%)', pointerEvents: 'none' }} />
+          <div className="card card-interactive border-primary/25">
             <div className="label-caps" style={{ marginBottom: 14 }}>Prossimo allenamento</div>
-            <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-.5px', marginBottom: 4, color: '#e7e7ee' }}>
+            <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-.5px', marginBottom: 4, color: 'hsl(var(--foreground))' }}>
               {nextWorkoutDay?.name || 'Nessun allenamento programmato'}
             </div>
-            <div style={{ fontSize: 13, color: '#a1a1b5', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: 'hsl(var(--content-secondary))', marginBottom: 16 }}>
               {nextWorkoutDay?.muscleGroups?.join(', ') || (activePlan ? 'Giorno di riposo' : 'Nessun piano attivo')}
             </div>
             {exercises.length > 0 ? (
@@ -505,32 +387,30 @@ export default function DashboardPage() {
                   <div key={i} style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '11px 14px', background: 'rgba(255,255,255,.025)',
-                    border: '1px solid #1e1e2e', borderRadius: 11,
+                    border: '1px solid hsl(var(--border))', borderRadius: 12,
                   }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 600, color: '#e7e7ee' }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
                       {e.exercise?.nameIt || e.exercise?.name}
                     </span>
-                    <span style={{ fontSize: 12.5, color: '#a1a1b5' }}>
+                    <span style={{ fontSize: 12.5, color: 'hsl(var(--content-secondary))' }}>
                       {e.sets}×{e.repsMin === e.repsMax ? e.repsMin : `${e.repsMin}-${e.repsMax}`}{e.rpeTarget ? ` · RPE ${e.rpeTarget}` : ''}
                     </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>
+              <div style={{ fontSize: 13, color: 'hsl(var(--content-tertiary))', marginBottom: 20 }}>
                 {activePlan ? 'Riposo oggi — nessun esercizio programmato.' : 'Crea un piano di allenamento per iniziare.'}
               </div>
             )}
             <button
               onClick={() => router.push('/workout/session')}
+              className="btn-hero"
               style={{
-                width: '100%', padding: 14, border: 'none', borderRadius: 13,
-                background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                color: '#fff', fontSize: 14.5, fontWeight: 700,
+                width: '100%', padding: 14, border: 'none', borderRadius: 12,
+                fontSize: 14.5, fontWeight: 700,
                 cursor: 'pointer', fontFamily: 'inherit',
-                boxShadow: '0 10px 30px rgba(99,102,241,.35)',
               }}
-              className="start-btn"
             >
               Inizia sessione →
             </button>
@@ -538,24 +418,23 @@ export default function DashboardPage() {
 
           {/* Volume + Sessioni */}
           <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div className="card-athena" style={{ padding: 20 }}>
+            <div className="card card-interactive" style={{ padding: 20 }}>
               <div className="label-caps" style={{ marginBottom: 10 }}>Volume settimana</div>
-              <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: -1, color: '#e7e7ee' }}>
-                {weekVolume ?? '—'}<span style={{ fontSize: 15, color: '#6b7280', fontWeight: 600 }}> t</span>
+              <div className="tabular-nums" style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, color: 'hsl(var(--foreground))' }}>
+                {weekVolume ?? '—'}<span style={{ fontSize: 15, color: 'hsl(var(--content-tertiary))', fontWeight: 600 }}> t</span>
               </div>
             </div>
-            <div className="card-athena" style={{ padding: 20 }}>
+            <div className="card card-interactive" style={{ padding: 20 }}>
               <div className="label-caps" style={{ marginBottom: 10 }}>Sessioni</div>
-              <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: -1, color: '#e7e7ee' }}>
-                {weekSessions}<span style={{ fontSize: 15, color: '#6b7280', fontWeight: 600 }}> / 5</span>
+              <div className="tabular-nums" style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, color: 'hsl(var(--foreground))' }}>
+                {weekSessions}<span style={{ fontSize: 15, color: 'hsl(var(--content-tertiary))', fontWeight: 600 }}> / 5</span>
               </div>
-              <div style={{ fontSize: 12, color: '#a1a1b5', fontWeight: 500, margin: '4px 0 14px' }}>questa settimana</div>
+              <div style={{ fontSize: 12, color: 'hsl(var(--content-secondary))', fontWeight: 500, margin: '4px 0 14px' }}>questa settimana</div>
               <div style={{ display: 'flex', gap: 6 }}>
                 {[0,1,2,3,4].map(i => (
                   <div key={i} style={{
                     flex: 1, height: 8, borderRadius: 4,
-                    background: i < weekSessions ? 'linear-gradient(90deg,#22c55e,#4ade80)' : '#1a1a24',
-                    boxShadow: i < weekSessions ? '0 0 8px rgba(34,197,94,.5)' : undefined,
+                    background: i < weekSessions ? 'hsl(var(--success))' : 'hsl(var(--surface-3))',
                   }} />
                 ))}
               </div>
@@ -563,11 +442,11 @@ export default function DashboardPage() {
           </div>
 
           {/* Trend peso */}
-          <div className="card-athena" style={{ flex: 1 }}>
+          <div className="card card-interactive" style={{ flex: 1 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
               <div className="label-caps">Trend peso · 8 settimane</div>
               {weightSnapshot && (
-                <div style={{ marginLeft: 'auto', fontSize: 13, color: '#22c55e', fontWeight: 700 }}>
+                <div style={{ marginLeft: 'auto', fontSize: 13, color: 'hsl(var(--success))', fontWeight: 700 }}>
                   {weightSnapshot.weeklyRateKg < 0 ? `${weightSnapshot.weeklyRateKg.toFixed(1)} kg/sett.` : `+${weightSnapshot.weeklyRateKg.toFixed(1)} kg/sett.`}
                 </div>
               )}
@@ -577,20 +456,20 @@ export default function DashboardPage() {
                 <AreaChart data={weightChartData}>
                   <defs>
                     <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
+                      <stop offset="0%" stopColor="hsl(var(--accent))" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="hsl(var(--accent))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <Area type="monotone" dataKey="v" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#weightGrad)" dot={false} />
+                  <Area type="monotone" dataKey="v" stroke="hsl(var(--accent))" strokeWidth={2.5} fill="url(#weightGrad)" dot={false} />
                   <Tooltip
-                    contentStyle={{ background: '#15151d', border: '1px solid #1e1e2e', borderRadius: 10, fontSize: 12 }}
+                    contentStyle={{ background: 'hsl(var(--surface-elevated))', border: '1px solid hsl(var(--border))', borderRadius: 10, fontSize: 12 }}
                     formatter={(v: any) => [`${v} kg`, 'Peso']}
                     labelFormatter={() => ''}
                   />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#6b7280' }}>
+              <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'hsl(var(--content-tertiary))' }}>
                 Registra il tuo peso per vedere il trend.
               </div>
             )}
@@ -603,14 +482,6 @@ export default function DashboardPage() {
         queryClient.invalidateQueries({ queryKey: ['recovery-latest'] });
         queryClient.invalidateQueries({ queryKey: ['recovery-readiness'] });
       }} />
-
-      <style>{`
-        .vital-pill:hover { transform: translateY(-3px); border-color: #2a2a3a !important; }
-        .recovery-card:hover { transform: translateY(-3px); }
-        .workout-card:hover { transform: translateY(-3px); box-shadow: 0 0 60px rgba(99,102,241,.22); }
-        .start-btn:hover { filter: brightness(1.08); }
-        .btn-outline-athena:hover { border-color: #6366f1 !important; }
-      `}</style>
     </div>
   );
 }

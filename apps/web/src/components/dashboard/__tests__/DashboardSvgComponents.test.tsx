@@ -60,19 +60,19 @@ describe('Dashboard SVG Components (Memoized)', () => {
   describe('MacroBar', () => {
     it('renders without error', () => {
       const { container } = render(
-        <MacroBar pct={65} gradient="linear-gradient(90deg, #6366f1, #8b5cf6)" />
+        <MacroBar pct={65} color="hsl(var(--primary))" />
       );
       expect(container.querySelector('div')).toBeInTheDocument();
     });
 
     it('caps percentage at 100', () => {
       const { container: c150 } = render(
-        <MacroBar pct={150} gradient="linear-gradient(90deg, red, blue)" />
+        <MacroBar pct={150} color="red" />
       );
       expect(c150.querySelector('div')).toBeInTheDocument();
 
       const { container: c0 } = render(
-        <MacroBar pct={0} gradient="linear-gradient(90deg, red, blue)" />
+        <MacroBar pct={0} color="red" />
       );
       expect(c0.querySelector('div')).toBeInTheDocument();
     });

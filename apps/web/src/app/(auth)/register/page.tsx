@@ -56,14 +56,14 @@ export default function RegisterPage() {
       
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md relative">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-primary/40">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-4">
             <Zap className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-3xl font-bold gradient-text mb-1">Athena AI</h1>
           <p className="text-muted-foreground">Inizia il tuo percorso con il coach AI più avanzato</p>
         </div>
 
-        <div className="glass-card-elevated p-8">
+        <div className="card p-8">
           <h2 className="text-xl font-bold mb-6">Crea il tuo account</h2>
 
           <form onSubmit={handleSubmit(onSubmit, shake)} className={`space-y-4 ${shaking ? 'animate-shake' : ''}`}>

@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import {
   User, Target, BarChart3, Calendar, Heart, Dumbbell, Brain,
   CheckCircle2, ChevronRight, ChevronLeft, Zap, Check,
+  Flame, Trophy, RefreshCw, Activity, Leaf, HeartPulse,
+  Building2, Home,
 } from 'lucide-react';
 
 const STEPS = ['Profilo', 'Obiettivi', 'Livello', 'Disponibilità', 'Stile di Vita', 'Metodologia', 'Completato'];
@@ -25,14 +27,14 @@ const STEP_CTAS = [
 ];
 
 const GOALS = [
-  { value: 'HYPERTROPHY',        label: 'Ipertrofia',      desc: 'Aumenta la massa muscolare',          icon: '💪', color: 'from-violet-500 to-purple-600' },
-  { value: 'WEIGHT_LOSS',        label: 'Dimagrimento',    desc: 'Riduci il grasso corporeo',           icon: '🔥', color: 'from-orange-500 to-red-500' },
-  { value: 'STRENGTH',           label: 'Forza',           desc: 'Aumenta la forza massimale',          icon: '⚡', color: 'from-yellow-500 to-amber-500' },
-  { value: 'POWERBUILDING',      label: 'Powerbuilding',   desc: 'Forza + massa muscolare',             icon: '🏋️', color: 'from-blue-500 to-indigo-500' },
-  { value: 'BODY_RECOMPOSITION', label: 'Ricomposizione',  desc: 'Perdi grasso, guadagna muscolo',      icon: '🔄', color: 'from-emerald-500 to-teal-500' },
-  { value: 'ATHLETIC_PERFORMANCE', label: 'Performance',  desc: 'Migliora le prestazioni atletiche',   icon: '🏆', color: 'from-cyan-500 to-blue-500' },
-  { value: 'LONGEVITY',          label: 'Longevità',       desc: 'Salute a lungo termine',              icon: '🌿', color: 'from-green-500 to-emerald-500' },
-  { value: 'GENERAL_HEALTH',     label: 'Salute Generale', desc: 'Forma fisica complessiva',            icon: '❤️', color: 'from-pink-500 to-rose-500' },
+  { value: 'HYPERTROPHY',        label: 'Ipertrofia',      desc: 'Aumenta la massa muscolare',          icon: Dumbbell },
+  { value: 'WEIGHT_LOSS',        label: 'Dimagrimento',    desc: 'Riduci il grasso corporeo',           icon: Flame },
+  { value: 'STRENGTH',           label: 'Forza',           desc: 'Aumenta la forza massimale',          icon: Zap },
+  { value: 'POWERBUILDING',      label: 'Powerbuilding',   desc: 'Forza + massa muscolare',             icon: Trophy },
+  { value: 'BODY_RECOMPOSITION', label: 'Ricomposizione',  desc: 'Perdi grasso, guadagna muscolo',      icon: RefreshCw },
+  { value: 'ATHLETIC_PERFORMANCE', label: 'Performance',  desc: 'Migliora le prestazioni atletiche',   icon: Activity },
+  { value: 'LONGEVITY',          label: 'Longevità',       desc: 'Salute a lungo termine',              icon: Leaf },
+  { value: 'GENERAL_HEALTH',     label: 'Salute Generale', desc: 'Forma fisica complessiva',            icon: HeartPulse },
 ];
 
 const LEVELS = [
@@ -64,10 +66,9 @@ function GeneratingScreen({ stage }: { stage: number }) {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="absolute inset-0 bg-gradient-radial from-primary/5 via-transparent to-transparent" />
       <div className="w-full max-w-sm relative text-center space-y-8">
-        {/* Pulsing brain icon */}
+        {/* Brain icon */}
         <div className="relative mx-auto w-24 h-24">
-          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary to-accent opacity-20 animate-ping" style={{ animationDuration: '2s' }} />
-          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-2xl shadow-primary/40">
+          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
             <Brain className="w-12 h-12 text-white" />
           </div>
         </div>
@@ -399,17 +400,23 @@ export default function OnboardingPage() {
 
     // Step 1: Goals
     <div key="goals" className="grid grid-cols-2 gap-3">
-      {GOALS.map(goal => (
-        <button
-          key={goal.value}
-          onClick={() => update({ goalType: goal.value })}
-          className={`p-4 rounded-2xl border text-left transition-all duration-200 ${data.goalType === goal.value ? 'border-primary bg-primary/10 glow-border' : 'border-border bg-surface hover:border-border/80'}`}
-        >
-          <span className="text-2xl">{goal.icon}</span>
-          <p className="font-semibold text-sm mt-2">{goal.label}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{goal.desc}</p>
-        </button>
-      ))}
+      {GOALS.map(goal => {
+        const GoalIcon = goal.icon;
+        const selected = data.goalType === goal.value;
+        return (
+          <button
+            key={goal.value}
+            onClick={() => update({ goalType: goal.value })}
+            className={`p-4 rounded-2xl border text-left transition-all duration-200 ${selected ? 'border-primary bg-primary/10' : 'border-border bg-surface hover:border-border/80'}`}
+          >
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${selected ? 'bg-primary/15 text-primary' : 'bg-surface-3 text-content-secondary'}`}>
+              <GoalIcon className="w-5 h-5" />
+            </div>
+            <p className="font-semibold text-sm mt-2">{goal.label}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{goal.desc}</p>
+          </button>
+        );
+      })}
     </div>,
 
     // Step 2: Level
@@ -456,13 +463,20 @@ export default function OnboardingPage() {
         </div>
       </div>
       <div className="flex gap-3">
-        {[{ v: true, l: '🏋️ Palestra', d: 'Accesso a macchinari completi' }, { v: false, l: '🏠 Casa', d: 'Allenamento a casa' }].map(opt => (
-          <button key={String(opt.v)} onClick={() => update({ hasGym: opt.v })}
-            className={`flex-1 p-4 rounded-2xl border text-left transition-all ${data.hasGym === opt.v ? 'border-primary bg-primary/10' : 'border-border bg-surface'}`}>
-            <p className="font-semibold text-sm">{opt.l}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{opt.d}</p>
-          </button>
-        ))}
+        {[{ v: true, l: 'Palestra', icon: Building2, d: 'Accesso a macchinari completi' }, { v: false, l: 'Casa', icon: Home, d: 'Allenamento a casa' }].map(opt => {
+          const LocationIcon = opt.icon;
+          const selected = data.hasGym === opt.v;
+          return (
+            <button key={String(opt.v)} onClick={() => update({ hasGym: opt.v })}
+              className={`flex-1 p-4 rounded-2xl border text-left transition-all ${selected ? 'border-primary bg-primary/10' : 'border-border bg-surface'}`}>
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-2 ${selected ? 'bg-primary/15 text-primary' : 'bg-surface-3 text-content-secondary'}`}>
+                <LocationIcon className="w-5 h-5" />
+              </div>
+              <p className="font-semibold text-sm">{opt.l}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{opt.d}</p>
+            </button>
+          );
+        })}
       </div>
     </div>,
 
@@ -620,7 +634,7 @@ export default function OnboardingPage() {
           {step < STEPS.length - 1 && (
             <div className="flex gap-3 mt-6">
               {step > 0 && (
-                <Button variant="ghost" onClick={() => setStep(s => s - 1)} size="md" aria-label="Passo precedente">
+                <Button variant="ghost" onClick={() => setStep(s => s - 1)} size="md" aria-label="Passo precedente" className="border border-border-strong">
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
               )}

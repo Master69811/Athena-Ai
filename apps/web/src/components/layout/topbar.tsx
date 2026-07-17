@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { Flame } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { authApi, gamificationApi } from '@/lib/api';
-import { NavIcon } from './nav-items';
+import { Modal } from '@/components/ui/modal';
+import { NAV_ICONS } from './nav-items';
 
 const PAGE_META: Record<string, [string, string]> = {
   '/dashboard':          ['Dashboard', 'La tua giornata in un colpo d\'occhio'],
@@ -79,19 +81,10 @@ function StreakBadge({ enabled }: { enabled: boolean }) {
   if (!data || data.current <= 0) return null;
 
   return (
-    <div
-      title={`Streak di allenamento: ${data.current} giorni`}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 7,
-        background: '#111118', border: '1px solid #1e1e2e',
-        padding: '8px 13px', borderRadius: 11,
-      }}
-    >
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M12 2s4 5 4 9a4 4 0 0 1-8 0c0-2 1.5-4 1.5-4" />
-      </svg>
-      <span style={{ fontSize: 13, fontWeight: 700, color: '#e7e7ee' }}>{data.current}</span>
-      <span style={{ fontSize: 12, color: '#6b7280' }}>giorni</span>
+    <div className="chip" title={`Streak di allenamento: ${data.current} giorni`}>
+      <Flame size={16} strokeWidth={2} className="text-warning" />
+      <span style={{ marginLeft: 6, fontWeight: 700 }}>{data.current}</span>
+      <span style={{ marginLeft: 4, color: 'hsl(var(--content-tertiary))', fontWeight: 500 }}>giorni</span>
     </div>
   );
 }
@@ -106,6 +99,7 @@ function AccountMenu({ name, initials }: { name: string; initials: string }) {
   const router = useRouter();
   const { logout } = useAuthStore();
   const [open, setOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -124,15 +118,14 @@ function AccountMenu({ name, initials }: { name: string; initials: string }) {
     };
   }, [open]);
 
-  const handleLogout = async () => {
-    setOpen(false);
-    if (!window.confirm("Vuoi uscire dall'account?")) return;
+  const confirmLogout = async () => {
+    setLogoutOpen(false);
     await authApi.logout().catch(() => {});
     logout();
     router.push('/login');
   };
 
-  const menuItems: Array<{ href: string; label: string; icon: Parameters<typeof NavIcon>[0]['name'] }> = [
+  const menuItems: Array<{ href: string; label: string; icon: keyof typeof NAV_ICONS }> = [
     { href: '/progress', label: 'Progress', icon: 'progress' },
     { href: '/achievements', label: 'Achievement', icon: 'achievements' },
     { href: '/settings', label: 'Impostazioni', icon: 'settings' },
@@ -162,55 +155,67 @@ function AccountMenu({ name, initials }: { name: string; initials: string }) {
         <div
           role="menu"
           aria-label={`Account di ${name}`}
+          className="card-overlay"
           style={{
             position: 'absolute', top: 'calc(100% + 10px)', right: 0,
-            minWidth: 200, zIndex: 50,
-            background: '#111118', border: '1px solid #1e1e2e',
-            borderRadius: 14, padding: 6,
-            boxShadow: '0 12px 32px rgba(0,0,0,.45)',
+            minWidth: 200, zIndex: 50, padding: 6,
           }}
         >
           <div style={{ padding: '8px 10px 6px', fontSize: 12.5, fontWeight: 600, color: '#e7e7ee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {name}
           </div>
-          {menuItems.map(({ href, label, icon }) => (
-            <Link
-              key={href}
-              href={href}
-              role="menuitem"
-              onClick={() => setOpen(false)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 10px', borderRadius: 9,
-                fontSize: 13.5, fontWeight: 600, color: '#c7c7d4',
-                textDecoration: 'none',
-              }}
-              className="sidebar-item"
-            >
-              <NavIcon name={icon} size={17} />
-              {label}
-            </Link>
-          ))}
+          {menuItems.map(({ href, label, icon }) => {
+            const Icon = NAV_ICONS[icon];
+            return (
+              <Link
+                key={href}
+                href={href}
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="rounded-lg hover:bg-surface-3"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 10px',
+                  fontSize: 13.5, fontWeight: 600, color: '#c7c7d4',
+                  textDecoration: 'none',
+                }}
+              >
+                <Icon size={17} strokeWidth={2} />
+                {label}
+              </Link>
+            );
+          })}
           <div style={{ height: 1, background: '#1e1e2e', margin: '6px 4px' }} />
           <button
             type="button"
             role="menuitem"
-            onClick={handleLogout}
+            onClick={() => { setOpen(false); setLogoutOpen(true); }}
+            className="rounded-lg hover:bg-surface-3"
             style={{
               display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-              padding: '9px 10px', borderRadius: 9, border: 'none', background: 'transparent',
+              padding: '9px 10px', border: 'none', background: 'transparent',
               fontSize: 13.5, fontWeight: 600, color: '#f87171', cursor: 'pointer', textAlign: 'left',
             }}
-            className="sidebar-item"
           >
             Esci
           </button>
         </div>
       )}
 
-      <style>{`
-        .sidebar-item:hover { background: #1a1a24 !important; }
-      `}</style>
+      <Modal open={logoutOpen} onClose={() => setLogoutOpen(false)} title="Vuoi uscire dall'account?">
+        <div className="flex gap-3 pt-1">
+          <button type="button" className="btn-secondary flex-1 h-10 rounded-xl text-sm" onClick={() => setLogoutOpen(false)}>
+            Annulla
+          </button>
+          <button
+            type="button"
+            className="flex-1 h-10 rounded-xl text-sm font-semibold bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity"
+            onClick={confirmLogout}
+          >
+            Esci
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -241,26 +246,13 @@ export function Topbar() {
       }}
     >
       <div style={{ minWidth: 0 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.3px', color: '#e7e7ee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</h1>
-        <div className="hidden sm:block" style={{ fontSize: 12, color: '#6b7280' }}>{subtitle}</div>
+        <h1 className="text-heading" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</h1>
+        <div className="hidden sm:block text-caption text-content-tertiary">{subtitle}</div>
       </div>
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
         <div className="hidden md:block">
           <Clock />
-        </div>
-
-        {/* Sync badge */}
-        <div
-          className="hidden sm:flex"
-          style={{
-            alignItems: 'center', gap: 6,
-            background: '#111118', border: '1px solid #1e1e2e',
-            padding: '7px 11px', borderRadius: 11,
-          }}
-        >
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 9px #22c55e', display: 'inline-block' }} aria-hidden="true" />
-          <span style={{ fontSize: 11.5, color: '#a1a1b5', fontWeight: 600 }}>Sync</span>
         </div>
 
         <StreakBadge enabled={!!user} />

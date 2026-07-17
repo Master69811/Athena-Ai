@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { NavIcon, isNavItemActive, type NavIconName } from './nav-items';
+import { NAV_ICONS, isNavItemActive, type NavIconName } from './nav-items';
 
 const NAV: Array<{ href: string; label: string; icon: NavIconName; exact?: boolean }> = [
   { href: '/dashboard', label: 'Home', icon: 'dashboard' },
@@ -31,6 +31,8 @@ export function MobileNav() {
       <div className="flex items-center justify-around px-2 py-2">
         {NAV.map(({ href, label, icon, exact }) => {
           const isActive = isNavItemActive(pathname, href, exact);
+          const Icon = NAV_ICONS[icon];
+          const color = isActive ? 'hsl(var(--primary))' : undefined;
           return (
             <Link
               key={href}
@@ -39,15 +41,18 @@ export function MobileNav() {
               style={{ flex: 1, textDecoration: 'none' }}
             >
               <motion.div whileTap={{ scale: 0.9 }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '4px 0' }}>
-                <div style={{
-                  padding: 6, borderRadius: 10,
-                  background: isActive ? 'rgba(99,102,241,.15)' : 'transparent',
-                  color: isActive ? '#8b5cf6' : '#6b7280',
-                  transition: 'all .15s',
-                }}>
-                  <NavIcon name={icon} size={22} />
+                <div
+                  className={'rounded-xl ' + (isActive ? 'bg-primary/12' : '')}
+                  style={{ padding: 6, color, transition: 'all .15s' }}
+                >
+                  <Icon size={22} strokeWidth={2} className={!isActive ? 'text-content-tertiary' : undefined} />
                 </div>
-                <span style={{ fontSize: 11, color: isActive ? '#a5b4fc' : '#6b7280', fontWeight: isActive ? 600 : 400 }}>{label}</span>
+                <span
+                  className={!isActive ? 'text-content-tertiary' : undefined}
+                  style={{ fontSize: 11, color, fontWeight: isActive ? 600 : 400 }}
+                >
+                  {label}
+                </span>
               </motion.div>
             </Link>
           );

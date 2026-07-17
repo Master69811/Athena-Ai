@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
 import { authApi, progressionApi } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
-import { NavIcon, isNavItemActive, type NavIconName } from './nav-items';
+import { Modal } from '@/components/ui/modal';
+import { NAV_ICONS, isNavItemActive, type NavIconName } from './nav-items';
 
 const NAV: Array<{ href: string; label: string; icon: NavIconName; exact?: boolean }> = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -24,6 +26,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const router = useRouter();
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ['progression-unread-count'],
@@ -35,8 +38,8 @@ export function Sidebar() {
     enabled: !!user,
   });
 
-  const handleLogout = async () => {
-    if (!window.confirm("Vuoi uscire dall'account?")) return;
+  const confirmLogout = async () => {
+    setLogoutOpen(false);
     await authApi.logout().catch(() => {});
     logout();
     router.push('/login');
@@ -59,9 +62,9 @@ export function Sidebar() {
       {/* Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '6px 8px 22px' }}>
         <div
-          className="animate-logo-pulse"
+          className="rounded-lg"
           style={{
-            width: 34, height: 34, borderRadius: 10,
+            width: 34, height: 34,
             background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 800, fontSize: 18, color: '#fff',
@@ -70,19 +73,13 @@ export function Sidebar() {
           A
         </div>
         <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-.4px', color: '#e7e7ee' }}>Athena</div>
-        <span style={{
-          marginLeft: 'auto', fontSize: 9, fontWeight: 700, letterSpacing: '.12em',
-          color: '#8b5cf6', border: '1px solid rgba(139,92,246,.35)',
-          padding: '3px 6px', borderRadius: 6,
-        }}>
-          AI
-        </span>
       </div>
 
       {/* Nav */}
       <nav aria-label="Navigazione principale" style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
         {NAV.map(({ href, label, icon, exact }) => {
           const isActive = isNavItemActive(pathname, href, exact);
+          const Icon = NAV_ICONS[icon];
           return (
             <Link
               key={href}
@@ -91,24 +88,21 @@ export function Sidebar() {
               aria-current={isActive ? 'page' : undefined}
             >
               <div
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 11,
-                  padding: '10px 12px', borderRadius: 11,
-                  fontSize: 13.5, fontWeight: 600, cursor: 'pointer',
-                  transition: 'all .15s',
-                  background: isActive ? 'linear-gradient(135deg,rgba(99,102,241,.18),rgba(139,92,246,.12))' : 'transparent',
-                  color: isActive ? '#fff' : '#8b8b9a',
-                }}
-                className={!isActive ? 'sidebar-item' : ''}
+                className={
+                  'relative flex items-center gap-[11px] px-3 py-[10px] rounded-xl text-[13.5px] font-semibold cursor-pointer transition-colors ' +
+                  (isActive ? 'text-foreground' : 'text-content-secondary hover:bg-surface-3 hover:text-foreground')
+                }
+                style={{ background: isActive ? 'hsl(var(--primary)/.12)' : undefined }}
               >
-                <NavIcon name={icon} />
-                <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
                 {isActive && (
-                  <span style={{
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: '#8b5cf6', boxShadow: '0 0 10px #8b5cf6',
-                  }} />
+                  <span
+                    className="absolute left-0 top-1/2 -translate-y-1/2 rounded-full"
+                    style={{ width: 3, height: 16, background: 'hsl(var(--primary))' }}
+                    aria-hidden="true"
+                  />
                 )}
+                <Icon size={19} strokeWidth={2} />
+                <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
                 {href === '/progress' && !isActive && (unreadData?.count ?? 0) > 0 && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, color: '#fff',
@@ -124,13 +118,7 @@ export function Sidebar() {
       </nav>
 
       {/* User card */}
-      <div
-        style={{
-          marginTop: 14, padding: 12, borderRadius: 14,
-          background: 'linear-gradient(135deg,rgba(99,102,241,.14),rgba(139,92,246,.10))',
-          border: '1px solid rgba(99,102,241,.25)',
-        }}
-      >
+      <div className="card-inner" style={{ marginTop: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
             type="button"
@@ -142,7 +130,7 @@ export function Sidebar() {
               fontWeight: 700, fontSize: 15, color: '#fff',
               cursor: 'pointer', flexShrink: 0,
             }}
-            onClick={handleLogout}
+            onClick={() => setLogoutOpen(true)}
             title="Esci"
             aria-label="Esci dall'account"
           >
@@ -162,9 +150,20 @@ export function Sidebar() {
         </div>
       </div>
 
-      <style>{`
-        .sidebar-item:hover { background: #1a1a24 !important; color: #e7e7ee !important; }
-      `}</style>
+      <Modal open={logoutOpen} onClose={() => setLogoutOpen(false)} title="Vuoi uscire dall'account?">
+        <div className="flex gap-3 pt-1">
+          <button type="button" className="btn-secondary flex-1 h-10 rounded-xl text-sm" onClick={() => setLogoutOpen(false)}>
+            Annulla
+          </button>
+          <button
+            type="button"
+            className="flex-1 h-10 rounded-xl text-sm font-semibold bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity"
+            onClick={confirmLogout}
+          >
+            Esci
+          </button>
+        </div>
+      </Modal>
     </aside>
   );
 }
