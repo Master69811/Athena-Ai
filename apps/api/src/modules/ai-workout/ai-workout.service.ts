@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PrismaService } from '../prisma/prisma.service';
@@ -6,6 +6,7 @@ import { TrainingMethodology, GoalType, ExperienceLevel } from '@prisma/client';
 
 @Injectable()
 export class AiWorkoutService {
+  private readonly logger = new Logger(AiWorkoutService.name);
   private genAI: GoogleGenerativeAI;
 
   constructor(private prisma: PrismaService, private configService: ConfigService) {
@@ -92,16 +93,23 @@ Generate a complete ${profile.trainingDaysPerWeek}-day program. Return ONLY this
       generationConfig: { maxOutputTokens: 8192, temperature: 0.7 },
     });
 
-    const result = await model.generateContent(userMessage);
-    const content = result.response.text();
+    let content: string;
+    try {
+      const result = await model.generateContent(userMessage);
+      content = result.response.text();
+    } catch (error) {
+      this.logger.error(`Gemini API call failed: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
+      throw new ServiceUnavailableException('Generazione del piano AI temporaneamente non disponibile. Riprova tra qualche minuto.');
+    }
 
     let planData: any;
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('No JSON found in response');
       planData = JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      throw new Error('Failed to parse AI workout plan. Please try again.');
+    } catch (error) {
+      this.logger.error(`Failed to parse AI workout plan response: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
+      throw new ServiceUnavailableException('Generazione del piano AI temporaneamente non disponibile. Riprova tra qualche minuto.');
     }
 
     await this.prisma.workoutPlan.updateMany({

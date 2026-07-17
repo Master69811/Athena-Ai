@@ -204,23 +204,81 @@ function CelebrationScreen({ data: userData, onContinue }: { data: any; onContin
   );
 }
 
+const ONBOARDING_DRAFT_KEY = 'athena-onboarding-draft';
+
+const DEFAULT_ONBOARDING_DATA = {
+  name: '', age: 25, gender: 'MALE', heightCm: 175, weightKg: 75,
+  bodyFatPercentage: undefined as number | undefined,
+  goalType: '', experienceLevel: '', methodology: '',
+  trainingDaysPerWeek: 4, sessionDurationMinutes: 60,
+  hasGym: true, equipment: [] as string[], injuries: [] as string[],
+  sleepHoursAvg: 7.5, stressLevel: 5, dailyStepsAvg: 8000, workType: 'MODERATE',
+};
+
+function GenerationFailedScreen({ retrying, onRetry, onGoToWorkout }: { retrying: boolean; onRetry: () => void; onGoToWorkout: () => void }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="absolute inset-0 bg-gradient-radial from-orange-500/5 via-transparent to-transparent" />
+      <div className="w-full max-w-sm relative text-center space-y-6">
+        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center mx-auto shadow-2xl shadow-orange-500/40">
+          <Brain className="w-10 h-10 text-white" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold mb-2">Generazione non riuscita</h2>
+          <p className="text-muted-foreground text-sm">
+            Il tuo profilo è salvato, ma la generazione del piano AI non è riuscita. Puoi riprovare senza rifare il form.
+          </p>
+        </div>
+        <div className="space-y-3">
+          <Button variant="gradient" size="xl" onClick={onRetry} loading={retrying} className="w-full">
+            <Zap className="w-5 h-5" />
+            Riprova
+          </Button>
+          <button onClick={onGoToWorkout} className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors">
+            Vai ad Allenamento e genera più tardi
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(ONBOARDING_DRAFT_KEY);
+      return saved ? (JSON.parse(saved).step as number) : 0;
+    } catch {
+      return 0;
+    }
+  });
   const [loading, setLoading] = useState(false);
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [generationStage, setGenerationStage] = useState(0);
+  const [generationFailed, setGenerationFailed] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
-  const [data, setData] = useState({
-    name: '', age: 25, gender: 'MALE', heightCm: 175, weightKg: 75,
-    bodyFatPercentage: undefined as number | undefined,
-    goalType: '', experienceLevel: '', methodology: '',
-    trainingDaysPerWeek: 4, sessionDurationMinutes: 60,
-    hasGym: true, equipment: [] as string[], injuries: [] as string[],
-    sleepHoursAvg: 7.5, stressLevel: 5, dailyStepsAvg: 8000, workType: 'MODERATE',
+  const [data, setData] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(ONBOARDING_DRAFT_KEY);
+      const parsedData = saved ? (JSON.parse(saved).data as Partial<typeof DEFAULT_ONBOARDING_DATA> | undefined) : undefined;
+      return parsedData ? { ...DEFAULT_ONBOARDING_DATA, ...parsedData } : DEFAULT_ONBOARDING_DATA;
+    } catch {
+      return DEFAULT_ONBOARDING_DATA;
+    }
   });
 
   const update = (fields: Partial<typeof data>) => setData(prev => ({ ...prev, ...fields }));
+
+  // Persist wizard progress so a failed AI generation (or accidental navigation)
+  // doesn't force the user to refill all 7 steps from scratch.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(ONBOARDING_DRAFT_KEY, JSON.stringify({ step, data }));
+    } catch {
+      // sessionStorage unavailable (e.g. private mode quota) — non-fatal.
+    }
+  }, [step, data]);
 
   // Advance generation stages while generating
   useEffect(() => {
@@ -241,14 +299,34 @@ export default function OnboardingPage() {
       await workoutApi.generateAI();
       setGeneratingPlan(false);
       setShowCelebration(true);
+      try { sessionStorage.removeItem(ONBOARDING_DRAFT_KEY); } catch { /* non-fatal */ }
     } catch {
       setGeneratingPlan(false);
       if (onboardingDone) {
-        toast('Profilo creato. Puoi generare il piano dalla sezione Allenamento.', { icon: '⚡' });
-        router.push('/workout');
+        // Profile is already saved server-side — don't make the user redo the form.
+        // Let them retry just the AI generation, or leave for /workout on their own terms.
+        toast('Profilo creato. La generazione del piano AI non è riuscita.', { icon: '⚡' });
+        setGenerationFailed(true);
       } else {
         toast.error('Errore durante la creazione del profilo. Riprova.');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const retryGeneration = async () => {
+    setLoading(true);
+    try {
+      setGeneratingPlan(true);
+      await workoutApi.generateAI();
+      setGeneratingPlan(false);
+      setGenerationFailed(false);
+      setShowCelebration(true);
+      try { sessionStorage.removeItem(ONBOARDING_DRAFT_KEY); } catch { /* non-fatal */ }
+    } catch {
+      setGeneratingPlan(false);
+      toast.error('Generazione ancora non riuscita. Riprova più tardi.');
     } finally {
       setLoading(false);
     }
@@ -454,6 +532,17 @@ export default function OnboardingPage() {
   // Generation screen
   if (generatingPlan) {
     return <GeneratingScreen stage={generationStage} />;
+  }
+
+  // Profile saved but AI plan generation failed — let the user retry without redoing the form.
+  if (generationFailed) {
+    return (
+      <GenerationFailedScreen
+        retrying={loading}
+        onRetry={retryGeneration}
+        onGoToWorkout={() => router.push('/workout')}
+      />
+    );
   }
 
   return (
