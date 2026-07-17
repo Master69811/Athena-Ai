@@ -29,10 +29,13 @@ DATABASE_URL, FRONTEND_URL=https://athena-ai-api.vercel.app, JWT_SECRET, JWT_REF
 6. `4b283a5` RagService: QdrantClient lazy instantiation (altro fix boot-crash, url vuoto in produzione)
 7. `e72f0fa` **rimozione dati falsi in tutta l'app + fix UX core** (dashboard, progress, achievements, workout page, session page, coach, nutrition, mobile nav, sidebar/topbar, RecoveryModal) — **verificato 135/135 test, build OK, GIÀ PUSHATO**
 
-## 🔧 IN CORSO — modifiche NON ancora committate (nel working tree adesso)
-File modificati, in attesa di test+commit+push:
-- `apps/api/src/modules/ai-workout/ai-workout.service.ts` — aggiunta gestione errori (try/catch attorno alla chiamata Gemini + parsing JSON, throw ServiceUnavailableException con messaggio chiaro invece di 500 generico opaco)
-- `apps/web/src/app/(onboarding)/onboarding/page.tsx` — resilienza wizard onboarding: salvataggio automatico progresso in sessionStorage (sopravvive a redirect/reload), + schermata "Riprova" se la generazione piano fallisce (invece di buttare l'utente su una pagina vuota costringendolo a rifare tutto il form)
+## ✅ Commit 8: `21191e9` — GIÀ PUSHATO (17 Luglio, 16:34)
+- `apps/api/src/modules/ai-workout/ai-workout.service.ts` — gestione errori (try/catch attorno alla chiamata Gemini + parsing JSON, throw ServiceUnavailableException con messaggio chiaro invece di 500 generico opaco)
+- `apps/web/src/app/(onboarding)/onboarding/page.tsx` — resilienza wizard onboarding: salvataggio automatico progresso in sessionStorage (sopravvive a redirect/reload), + schermata "Riprova" se la generazione piano fallisce
+- `CHECKPOINT.md` — questo file (nota: prima versione conteneva un secret Gemini per errore, bloccato da GitHub push protection, corretto con `git commit --amend` prima del push riuscito)
+- Test: 84/84 API + 51/51 web passano. Build: nest build OK. tsc --noEmit pulito su onboarding page.
+- **CONFERMATO IN PRODUZIONE (17/07 16:52 UTC)**: redeploy completato, test end-to-end ripetuto. Ora l'errore è pulito: HTTP 503 "Generazione del piano AI temporaneamente non disponibile" (prima era 500 opaco). Il messaggio client NON rivela la causa reale per sicurezza — serve leggere i log Render (`[AiWorkoutService] ERROR ...`) per vedere l'errore Gemini preciso (probabile: formato chiave non valido — vedi nota sopra su formato `AQ.` vs `AIzaSy...`, oppure nome modello errato, oppure quota).
+- **PROSSIMO STEP (bloccato in attesa dell'utente)**: utente deve controllare Render → Logs e riportare la riga di errore esatta di AiWorkoutService per capire la causa precisa e fixarla definitivamente
 
 ## ➡️ PROSSIMI PASSI (in ordine)
 1. **Test + build** dei 2 file sopra: `cd apps/api && pnpm exec jest --silent && pnpm exec nest build` per il backend; per il frontend verificare tsc/build Next.js
