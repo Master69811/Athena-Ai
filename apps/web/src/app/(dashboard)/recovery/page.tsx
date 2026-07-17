@@ -5,20 +5,12 @@ import { useQuery } from '@tanstack/react-query';
 import { recoveryApi } from '@/lib/api';
 import { RecoveryModal } from '@/components/recovery/RecoveryModal';
 
-/* ─── keyframes ─────────────────────────────────────────── */
-const STYLES = `
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-`;
-
 /* ─── helpers ───────────────────────────────────────────── */
 function CapLabel({ children, mb = 0 }: { children: React.ReactNode; mb?: number }) {
   return (
     <p style={{
       fontSize: 11, fontWeight: 700, letterSpacing: '.14em',
-      color: '#6b7280', textTransform: 'uppercase', margin: 0, marginBottom: mb,
+      color: 'hsl(var(--content-tertiary))', textTransform: 'uppercase', margin: 0, marginBottom: mb,
     }}>
       {children}
     </p>
@@ -26,9 +18,9 @@ function CapLabel({ children, mb = 0 }: { children: React.ReactNode; mb?: number
 }
 
 function scoreColor(score: number) {
-  if (score >= 80) return '#22c55e';
-  if (score >= 60) return '#f59e0b';
-  return '#ef4444';
+  if (score >= 80) return 'hsl(var(--success))';
+  if (score >= 60) return 'hsl(var(--warning))';
+  return 'hsl(var(--destructive))';
 }
 function scoreLabel(score: number) {
   if (score >= 80) return 'Ottimo';
@@ -38,7 +30,7 @@ function scoreLabel(score: number) {
 
 /* ─── recovery ring ─────────────────────────────────────── */
 function RecoveryRing({ score }: { score: number }) {
-  const r = (190 - 15) / 2;
+  const r = (190 - 12) / 2;
   const circ = 2 * Math.PI * r;
   const pct = Math.min(1, score / 100);
   const color = scoreColor(score);
@@ -50,12 +42,12 @@ function RecoveryRing({ score }: { score: number }) {
         width={190} height={190}
         style={{ transform: 'rotate(-90deg)', display: 'block' }}
       >
-        <circle cx={95} cy={95} r={r} fill="none" stroke="#1a1a24" strokeWidth={15} />
+        <circle cx={95} cy={95} r={r} fill="none" stroke="hsl(var(--surface-3))" strokeWidth={12} />
         <circle
           cx={95} cy={95} r={r}
           fill="none"
           stroke={color}
-          strokeWidth={15}
+          strokeWidth={12}
           strokeLinecap="round"
           strokeDasharray={circ}
           strokeDashoffset={circ * (1 - pct)}
@@ -68,7 +60,7 @@ function RecoveryRing({ score }: { score: number }) {
         alignItems: 'center', justifyContent: 'center',
         gap: 4,
       }}>
-        <span style={{ fontSize: 50, fontWeight: 800, color: '#e7e7ee', lineHeight: 1 }}>
+        <span style={{ fontSize: 50, fontWeight: 700, color: 'hsl(var(--foreground))', lineHeight: 1 }}>
           {score}
         </span>
         <span style={{ fontSize: 12, fontWeight: 700, color }}>{label}</span>
@@ -81,23 +73,28 @@ function RecoveryRing({ score }: { score: number }) {
 interface FactorTileProps {
   label: string;
   value: string;
-  color: string;
+  color?: string;
 }
 function FactorTile({ label, value, color }: FactorTileProps) {
   return (
-    <div style={{
-      background: '#15151d',
-      border: '1px solid #1e1e2e',
-      borderRadius: 14,
-      padding: '18px 8px',
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      gap: 6,
-    }}>
-      <span style={{ fontSize: 22, fontWeight: 800, color }}>{value}</span>
+    <div
+      className="card-inner"
+      style={{
+        padding: '18px 8px',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: 6,
+      }}
+    >
+      <span
+        className={`tabular-nums${color ? '' : ' text-content-disabled'}`}
+        style={{ fontSize: 22, fontWeight: 700, color }}
+      >
+        {value}
+      </span>
       <span style={{
         fontSize: 11, fontWeight: 700, letterSpacing: '.1em',
-        color: '#6b7280', textTransform: 'uppercase', textAlign: 'center',
+        color: 'hsl(var(--content-tertiary))', textTransform: 'uppercase', textAlign: 'center',
       }}>
         {label}
       </span>
@@ -131,7 +128,8 @@ function WeekBarChart({ history }: WeekBarChartProps) {
       gap: 8, padding: '8px 0',
     }}>
       {slots.map(({ dateStr, dayLabel, score, isToday }) => {
-        const barH = score > 0 ? Math.max(6, Math.round((score / 100) * MAX_H)) : 6;
+        const hasScore = score > 0;
+        const barH = hasScore ? Math.max(6, Math.round((score / 100) * MAX_H)) : 4;
         return (
           <div
             key={dateStr}
@@ -142,26 +140,26 @@ function WeekBarChart({ history }: WeekBarChartProps) {
             }}
           >
             {/* score label above */}
-            {score > 0 && (
-              <span style={{ fontSize: 10, color: '#a1a1b5', fontWeight: 600 }}>
+            {hasScore && (
+              <span style={{ fontSize: 10, color: 'hsl(var(--content-secondary))', fontWeight: 600 }}>
                 {score}
               </span>
             )}
             {/* bar */}
             <div
+              className={isToday ? 'border border-border-strong' : ''}
               style={{
                 width: '100%',
                 height: barH,
-                background: '#8b5cf6',
-                opacity: isToday ? 1 : 0.4,
+                background: hasScore ? 'hsl(var(--accent))' : 'hsl(var(--surface-3))',
                 borderRadius: '4px 4px 0 0',
-                minHeight: 6,
+                minHeight: 4,
               }}
             />
             {/* day label */}
             <span style={{
               fontSize: 11, fontWeight: 600,
-              color: isToday ? '#e7e7ee' : '#6b7280',
+              color: isToday ? 'hsl(var(--foreground))' : 'hsl(var(--content-tertiary))',
             }}>
               {dayLabel}
             </span>
@@ -202,31 +200,27 @@ export default function RecoveryPage() {
   const history: Array<{ date: string; score: number }> = historyRaw ?? [];
 
   /* factor colors */
-  const sleepColor  = sleepHours >= 7.5 ? '#22c55e' : sleepHours >= 6 ? '#f59e0b' : '#ef4444';
-  const qualColor   = sleepQuality >= 7 ? '#22c55e' : sleepQuality >= 5 ? '#f59e0b' : '#ef4444';
-  const stressColor = stressLevel <= 3 ? '#22c55e' : stressLevel <= 6 ? '#f59e0b' : '#ef4444';
-  const energyColor = energyLevel >= 7 ? '#22c55e' : energyLevel >= 5 ? '#f59e0b' : '#ef4444';
+  const sleepColor  = sleepHours >= 7.5 ? 'hsl(var(--success))' : sleepHours >= 6 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))';
+  const qualColor   = sleepQuality >= 7 ? 'hsl(var(--success))' : sleepQuality >= 5 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))';
+  const stressColor = stressLevel <= 3 ? 'hsl(var(--success))' : stressLevel <= 6 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))';
+  const energyColor = energyLevel >= 7 ? 'hsl(var(--success))' : energyLevel >= 5 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))';
 
   return (
     <>
-      <style>{STYLES}</style>
-
-      <div style={{ maxWidth: 1180, animation: 'fadeUp .4s ease' }}>
+      <div className="animate-fade-up" style={{ maxWidth: 1180 }}>
         <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20 }}>
 
           {/* ── LEFT: Recovery Score ── */}
-          <div style={{
-            background: '#111118',
-            border: '1px solid rgba(34,197,94,.18)',
-            boxShadow: '0 0 50px rgba(34,197,94,.12)',
-            borderRadius: 20,
-            padding: 24,
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 0,
-          }}>
+          <div
+            className="card"
+            style={{
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 0,
+            }}
+          >
             <CapLabel mb={18}>Recovery Score</CapLabel>
 
             <RecoveryRing score={hasData ? score : 0} />
@@ -234,16 +228,11 @@ export default function RecoveryPage() {
             <div style={{ marginTop: 20, width: '100%' }}>
               <button
                 onClick={() => setOpen(true)}
+                className="btn-hero rounded-xl"
                 style={{
                   width: '100%',
                   padding: '12px 15px',
-                  border: 'none',
-                  borderRadius: 12,
-                  background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                  color: '#fff',
                   fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
                 }}
               >
                 Registra recupero di oggi
@@ -251,7 +240,7 @@ export default function RecoveryPage() {
             </div>
 
             {!hasData && (
-              <p style={{ fontSize: 11, color: '#6b7280', marginTop: 10 }}>
+              <p style={{ fontSize: 11, color: 'hsl(var(--content-tertiary))', marginTop: 10 }}>
                 Nessun dato ancora — registra il tuo primo recupero
               </p>
             )}
@@ -261,50 +250,39 @@ export default function RecoveryPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
             {/* Fattori di oggi */}
-            <div style={{
-              background: '#111118',
-              border: '1px solid #1e1e2e',
-              borderRadius: 20,
-              padding: 24,
-            }}>
+            <div className="card">
               <CapLabel mb={18}>Fattori di oggi</CapLabel>
               <div className="resp-tiles" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10 }}>
                 <FactorTile
                   label="Sonno"
                   value={hasData ? `${sleepHours}h` : '—'}
-                  color={hasData ? sleepColor : '#3a3a48'}
+                  color={hasData ? sleepColor : undefined}
                 />
                 <FactorTile
                   label="Qualità"
                   value={hasData ? `${sleepQuality}/10` : '—'}
-                  color={hasData ? qualColor : '#3a3a48'}
+                  color={hasData ? qualColor : undefined}
                 />
                 <FactorTile
                   label="Stress"
                   value={hasData ? `${stressLevel}/10` : '—'}
-                  color={hasData ? stressColor : '#3a3a48'}
+                  color={hasData ? stressColor : undefined}
                 />
                 <FactorTile
                   label="Energia"
                   value={hasData ? `${energyLevel}/10` : '—'}
-                  color={hasData ? energyColor : '#3a3a48'}
+                  color={hasData ? energyColor : undefined}
                 />
                 <FactorTile
                   label="Passi"
                   value={hasData ? (steps >= 1000 ? `${(steps / 1000).toFixed(1)}k` : String(steps)) : '—'}
-                  color={hasData ? (steps >= 8000 ? '#22c55e' : steps >= 5000 ? '#f59e0b' : '#ef4444') : '#3a3a48'}
+                  color={hasData ? (steps >= 8000 ? 'hsl(var(--success))' : steps >= 5000 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))') : undefined}
                 />
               </div>
             </div>
 
             {/* Ultimi 7 giorni */}
-            <div style={{
-              background: '#111118',
-              border: '1px solid #1e1e2e',
-              borderRadius: 20,
-              padding: 24,
-              flex: 1,
-            }}>
+            <div className="card" style={{ flex: 1 }}>
               <CapLabel mb={18}>Ultimi 7 giorni</CapLabel>
               {history.length > 0 ? (
                 <WeekBarChart history={history} />
@@ -313,7 +291,7 @@ export default function RecoveryPage() {
                 <WeekBarChart history={[]} />
               )}
               {history.length === 0 && (
-                <p style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', marginTop: 8 }}>
+                <p style={{ fontSize: 12, color: 'hsl(var(--content-tertiary))', textAlign: 'center', marginTop: 8 }}>
                   Registra il recupero ogni giorno per vedere il tuo andamento
                 </p>
               )}

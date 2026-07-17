@@ -12,37 +12,6 @@ import { PlusCircle } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
-/* ─── Keyframe ─── */
-const fadeUpStyle = `
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(16px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-`;
-
-const LABEL_CAPS: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: '.14em',
-  color: '#6b7280',
-  textTransform: 'uppercase',
-};
-
-const CARD: React.CSSProperties = {
-  background: '#111118',
-  border: '1px solid #1e1e2e',
-  borderRadius: 20,
-  padding: 24,
-  animation: 'fadeUp .4s ease',
-};
-
-const INNER_SURFACE: React.CSSProperties = {
-  background: '#15151d',
-  border: '1px solid #1e1e2e',
-  borderRadius: 14,
-  padding: 16,
-};
-
 /* Maps real BodyMeasurement fields (from the API) to their display labels */
 const MEASUREMENT_FIELDS: { key: string; label: string }[] = [
   { key: 'chestCm', label: 'Petto' },
@@ -133,33 +102,31 @@ export default function ProgressPage() {
     : [];
 
   const tooltipStyle: React.CSSProperties = {
-    background: '#111118',
-    border: '1px solid #1e1e2e',
+    background: 'hsl(var(--surface-elevated))',
+    border: '1px solid hsl(var(--border-strong))',
     borderRadius: 12,
-    color: '#e7e7ee',
+    color: 'hsl(var(--foreground))',
     fontSize: 12,
   };
 
   return (
     <>
-      <style>{fadeUpStyle}</style>
-
-      <div style={{ maxWidth: 1180, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="animate-fade-up" style={{ maxWidth: 1180, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* Row 1: two area charts */}
         <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
           {/* Card: Peso corporeo */}
-          <div style={CARD}>
+          <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-              <span style={LABEL_CAPS}>Peso corporeo</span>
+              <span className="label-caps">Peso corporeo</span>
               {deltaPeso !== null && weeks !== null && (
                 <span style={{
                   fontSize: 12,
                   fontWeight: 600,
-                  color: deltaPeso <= 0 ? '#22c55e' : '#f87171',
-                  background: deltaPeso <= 0 ? 'rgba(34,197,94,.12)' : 'rgba(248,113,113,.12)',
-                  border: `1px solid ${deltaPeso <= 0 ? 'rgba(34,197,94,.25)' : 'rgba(248,113,113,.25)'}`,
+                  color: deltaPeso <= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))',
+                  background: deltaPeso <= 0 ? 'hsl(var(--success)/.10)' : 'hsl(var(--destructive)/.10)',
+                  border: `1px solid ${deltaPeso <= 0 ? 'hsl(var(--success)/.25)' : 'hsl(var(--destructive)/.25)'}`,
                   borderRadius: 8,
                   padding: '3px 10px',
                 }}>
@@ -187,10 +154,11 @@ export default function ProgressPage() {
               </div>
             ) : (
               <div style={{ height: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                <span style={{ fontSize: 13, color: '#6b7280' }}>Nessun dato ancora</span>
+                <span className="text-caption text-content-tertiary">Nessun dato ancora</span>
                 <button
                   onClick={() => setModalOpen(true)}
-                  style={{ fontSize: 12, color: '#a1a1b5', background: '#15151d', border: '1px solid #2a2a3a', borderRadius: 10, padding: '7px 14px', cursor: 'pointer' }}
+                  className="btn-secondary rounded-xl"
+                  style={{ fontSize: 12, padding: '7px 14px' }}
                 >
                   + Aggiungi peso
                 </button>
@@ -199,9 +167,9 @@ export default function ProgressPage() {
           </div>
 
           {/* Card: Massa magra stimata */}
-          <div style={CARD}>
+          <div className="card">
             <div style={{ marginBottom: 18 }}>
-              <span style={LABEL_CAPS}>Massa magra stimata</span>
+              <span className="label-caps">Massa magra stimata</span>
             </div>
 
             {leanData.filter((d: any) => d.lean !== null).length > 0 ? (
@@ -223,32 +191,21 @@ export default function ProgressPage() {
               </div>
             ) : (
               <div style={{ height: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13, color: '#6b7280' }}>Inserisci peso + % grasso</span>
-                <span style={{ fontSize: 12, color: '#6b7280', opacity: .7 }}>per stimare la massa magra</span>
+                <span className="text-caption text-content-tertiary">Inserisci peso + % grasso</span>
+                <span className="text-caption text-content-tertiary" style={{ opacity: .7 }}>per stimare la massa magra</span>
               </div>
             )}
           </div>
         </div>
 
         {/* Row 2: Misurazioni card */}
-        <div style={CARD}>
+        <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-            <span style={LABEL_CAPS}>Misurazioni</span>
+            <span className="label-caps">Misurazioni</span>
             <button
               onClick={() => setModalOpen(true)}
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: '#a1a1b5',
-                background: '#1a1a24',
-                border: '1px solid #2a2a3a',
-                borderRadius: 11,
-                padding: '7px 14px',
-                cursor: 'pointer',
-                transition: 'border-color .2s',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = '#6366f1')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = '#2a2a3a')}
+              className="btn-secondary rounded-xl"
+              style={{ fontSize: 13, padding: '7px 14px' }}
             >
               + Aggiungi misurazione
             </button>
@@ -257,18 +214,18 @@ export default function ProgressPage() {
           {measurementTiles.length > 0 ? (
             <div className="resp-tiles" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14 }}>
               {measurementTiles.map(m => (
-                <div key={m.label} style={INNER_SURFACE}>
-                  <div style={{ ...LABEL_CAPS, marginBottom: 6 }}>{m.label}</div>
+                <div key={m.label} className="card-inner">
+                  <div className="label-caps" style={{ marginBottom: 6 }}>{m.label}</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-                    <span style={{ fontSize: 24, fontWeight: 800, color: '#e7e7ee', lineHeight: 1 }}>{m.value}</span>
-                    <span style={{ fontSize: 12, color: '#6b7280' }}>{m.unit}</span>
+                    <span className="tabular-nums" style={{ fontSize: 24, fontWeight: 700, color: 'hsl(var(--foreground))', lineHeight: 1 }}>{m.value}</span>
+                    <span className="text-caption text-content-tertiary">{m.unit}</span>
                   </div>
                   {m.delta !== null && (
                     <div style={{
                       fontSize: 12,
                       fontWeight: 600,
                       marginTop: 6,
-                      color: m.delta >= 0 ? '#22c55e' : '#f87171',
+                      color: m.delta >= 0 ? 'hsl(var(--success))' : 'hsl(var(--destructive))',
                     }}>
                       {m.delta > 0 ? '+' : ''}{m.delta.toString().replace('.', ',')} cm
                     </div>
@@ -278,12 +235,13 @@ export default function ProgressPage() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '24px 0' }}>
-              <span style={{ fontSize: 13, color: '#6b7280', textAlign: 'center' }}>
+              <span className="text-caption text-content-tertiary" style={{ textAlign: 'center' }}>
                 Nessuna misurazione registrata — aggiungi la tua prima misurazione
               </span>
               <button
                 onClick={() => setModalOpen(true)}
-                style={{ fontSize: 12, color: '#a1a1b5', background: '#15151d', border: '1px solid #2a2a3a', borderRadius: 10, padding: '7px 14px', cursor: 'pointer' }}
+                className="btn-secondary rounded-xl"
+                style={{ fontSize: 12, padding: '7px 14px' }}
               >
                 + Aggiungi misurazione
               </button>
@@ -294,16 +252,7 @@ export default function ProgressPage() {
         {/* Analytics link */}
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Link href="/progress/analytics">
-            <button style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: '#a1a1b5',
-              background: '#15151d',
-              border: '1px solid #2a2a3a',
-              borderRadius: 11,
-              padding: '9px 18px',
-              cursor: 'pointer',
-            }}>
+            <button className="btn-secondary rounded-xl" style={{ fontSize: 13, padding: '9px 18px' }}>
               Vedi Analytics →
             </button>
           </Link>

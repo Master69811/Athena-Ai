@@ -5,7 +5,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { nutritionApi } from '@/lib/api';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
-import { Search, Check, PlusCircle, Brain, Apple, Utensils } from 'lucide-react';
+import {
+  Search, Check, PlusCircle, Brain, Apple, Utensils,
+  Sunrise, Sun, Moon, Cookie, UtensilsCrossed,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 
@@ -19,28 +22,25 @@ const MEAL_TYPES = [
 const MEAL_LABELS: Record<string, string> = {
   BREAKFAST: 'Colazione', LUNCH: 'Pranzo', DINNER: 'Cena', SNACK: 'Spuntino',
 };
-const MEAL_EMOJI: Record<string, string> = {
-  BREAKFAST: '☀️', LUNCH: '🥗', DINNER: '🍽️', SNACK: '🍎',
+const MEAL_ICONS: Record<string, typeof Sunrise> = {
+  BREAKFAST: Sunrise, LUNCH: Sun, DINNER: Moon, SNACK: Cookie,
 };
 
-/* ─── keyframes injected once ───────────────────────────── */
-const STYLES = `
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes barGrow {
-  from { transform: scaleX(0); }
-  to   { transform: scaleX(1); }
-}
-`;
-
 /* ─── sub-components ────────────────────────────────────── */
+function MealIcon({ type }: { type: string }) {
+  const Icon = MEAL_ICONS[type] ?? UtensilsCrossed;
+  return (
+    <div className="w-10 h-10 rounded-xl bg-surface-3 text-content-secondary flex items-center justify-center flex-shrink-0">
+      <Icon size={20} />
+    </div>
+  );
+}
+
 function CapLabel({ children }: { children: React.ReactNode }) {
   return (
     <p style={{
       fontSize: 11, fontWeight: 700, letterSpacing: '.14em',
-      color: '#6b7280', textTransform: 'uppercase', marginBottom: 0,
+      color: 'hsl(var(--content-tertiary))', textTransform: 'uppercase', marginBottom: 0,
     }}>
       {children}
     </p>
@@ -52,8 +52,8 @@ interface DonutProps {
   target: number;
 }
 function CalorieDonut({ consumed, target }: DonutProps) {
-  const r = (190 - 15) / 2;           // 87.5
-  const circ = 2 * Math.PI * r;       // ≈ 549.8
+  const r = (190 - 12) / 2;
+  const circ = 2 * Math.PI * r;
   const pct = target > 0 ? Math.min(1, consumed / target) : 0;
   const remaining = Math.max(0, target - consumed);
 
@@ -68,26 +68,20 @@ function CalorieDonut({ consumed, target }: DonutProps) {
         <circle
           cx={95} cy={95} r={r}
           fill="none"
-          stroke="#1a1a24"
-          strokeWidth={15}
+          stroke="hsl(var(--surface-3))"
+          strokeWidth={12}
         />
         {/* fill */}
         <circle
           cx={95} cy={95} r={r}
           fill="none"
-          stroke="url(#donutGrad)"
-          strokeWidth={15}
+          stroke="hsl(var(--primary))"
+          strokeWidth={12}
           strokeLinecap="round"
           strokeDasharray={circ}
           strokeDashoffset={circ * (1 - pct)}
           style={{ transition: 'stroke-dashoffset .9s cubic-bezier(.4,0,.2,1)' }}
         />
-        <defs>
-          <linearGradient id="donutGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#6366f1" />
-            <stop offset="100%" stopColor="#8b5cf6" />
-          </linearGradient>
-        </defs>
       </svg>
       {/* centred text */}
       <div style={{
@@ -96,13 +90,13 @@ function CalorieDonut({ consumed, target }: DonutProps) {
         alignItems: 'center', justifyContent: 'center',
         gap: 2,
       }}>
-        <span style={{ fontSize: 38, fontWeight: 800, color: '#e7e7ee', lineHeight: 1 }}>
+        <span style={{ fontSize: 38, fontWeight: 700, color: 'hsl(var(--foreground))', lineHeight: 1 }}>
           {Math.round(consumed)}
         </span>
-        <span style={{ fontSize: 12, color: '#6b7280' }}>
+        <span style={{ fontSize: 12, color: 'hsl(var(--content-tertiary))' }}>
           di {Math.round(target)} kcal
         </span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'hsl(var(--success))' }}>
           {Math.round(remaining)} rimanenti
         </span>
       </div>
@@ -115,24 +109,24 @@ interface MacroBarProps {
   consumed: number;
   target: number;
   unit: string;
-  gradient: string;
+  color: string;
 }
-function MacroBar({ label, consumed, target, unit, gradient }: MacroBarProps) {
+function MacroBar({ label, consumed, target, unit, color }: MacroBarProps) {
   const pct = target > 0 ? Math.min(100, (consumed / target) * 100) : 0;
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
         <CapLabel>{label}</CapLabel>
-        <span style={{ fontSize: 12, color: '#a1a1b5', fontWeight: 600 }}>
+        <span style={{ fontSize: 12, color: 'hsl(var(--content-secondary))', fontWeight: 600 }}>
           {Math.round(consumed)} / {Math.round(target)} {unit}
         </span>
       </div>
-      <div style={{ height: 9, background: '#1a1a24', borderRadius: 6, overflow: 'hidden' }}>
+      <div style={{ height: 8, background: 'hsl(var(--surface-3))', borderRadius: 6, overflow: 'hidden' }}>
         <div
           style={{
             height: '100%',
             width: `${pct}%`,
-            background: gradient,
+            background: color,
             borderRadius: 6,
             transformOrigin: 'left',
             animation: 'barGrow .9s cubic-bezier(.4,0,.2,1)',
@@ -146,34 +140,32 @@ function MacroBar({ label, consumed, target, unit, gradient }: MacroBarProps) {
 /* ─── empty / no-plan states ────────────────────────────── */
 function NoPlanState({ onGenerate, loading }: { onGenerate: () => void; loading: boolean }) {
   return (
-    <div style={{
+    <div className="card animate-fade-up" style={{
       gridColumn: '1 / -1',
-      background: '#111118', border: '1px solid #1e1e2e',
-      borderRadius: 20, padding: 48,
+      padding: 48,
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       gap: 16, textAlign: 'center',
-      animation: 'fadeUp .4s ease',
     }}>
       <div style={{
         width: 64, height: 64, borderRadius: 18,
         background: 'rgba(99,102,241,.12)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <Apple size={32} color="#6366f1" />
+        <Apple size={32} color="hsl(var(--primary))" />
       </div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, color: '#e7e7ee', margin: 0 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 700, color: 'hsl(var(--foreground))', margin: 0 }}>
         Genera il Tuo Piano Nutrizionale
       </h2>
-      <p style={{ fontSize: 14, color: '#a1a1b5', maxWidth: 340, margin: 0 }}>
+      <p style={{ fontSize: 14, color: 'hsl(var(--content-secondary))', maxWidth: 340, margin: 0 }}>
         Athena calcola le tue calorie e macro basandosi su TDEE, obiettivo e stile di vita.
       </p>
       <button
         onClick={onGenerate}
         disabled={loading}
+        className="btn-secondary rounded-xl"
         style={{
-          padding: '9px 15px', border: 'none', borderRadius: 11,
-          background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-          color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          padding: '9px 15px',
+          fontSize: 13,
           display: 'flex', alignItems: 'center', gap: 8,
           opacity: loading ? .6 : 1,
         }}
@@ -271,21 +263,21 @@ export default function NutritionPage() {
   /* ── render ─────────────────────────────────────────── */
   return (
     <>
-      <style>{STYLES}</style>
-
-      <div style={{ maxWidth: 1180, animation: 'fadeUp .4s ease' }}>
+      <div className="animate-fade-up" style={{ maxWidth: 1180 }}>
         {planLoading ? (
-          /* skeleton */
+          /* skeleton — mirrors the real two-column layout */
           <div className="resp-stack" style={{
             display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20,
           }}>
-            {[0, 1].map(i => (
-              <div key={i} style={{
-                background: '#111118', border: '1px solid #1e1e2e',
-                borderRadius: 20, padding: 24, height: 320,
-                opacity: .5,
-              }} />
-            ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div className="card animate-pulse" style={{ height: 320 }} />
+              <div className="card animate-pulse" style={{ height: 320 }} />
+            </div>
+            <div className="card animate-pulse" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} className="h-16 bg-surface-3 rounded-xl" />
+              ))}
+            </div>
           </div>
         ) : !plan ? (
           <NoPlanState onGenerate={() => generateMutation.mutate()} loading={generateMutation.isPending} />
@@ -296,39 +288,27 @@ export default function NutritionPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
               {/* Obiettivo calorico */}
-              <div style={{
-                background: '#111118',
-                border: '1px solid rgba(99,102,241,.18)',
-                boxShadow: '0 0 45px rgba(99,102,241,.1)',
-                borderRadius: 20,
-                padding: 24,
-                textAlign: 'center',
-              }}>
+              <div className="card border-primary/18" style={{ textAlign: 'center' }}>
                 <CapLabel>Obiettivo Calorico</CapLabel>
                 <div style={{ marginTop: 18, marginBottom: 14 }}>
                   <CalorieDonut consumed={consumed} target={target} />
                 </div>
-                <p style={{ fontSize: 13, color: '#a1a1b5', margin: '8px 0 0' }}>
-                  Obiettivo: <strong style={{ color: '#e7e7ee' }}>{Math.round(target)} kcal</strong>
+                <p style={{ fontSize: 13, color: 'hsl(var(--content-secondary))', margin: '8px 0 0' }}>
+                  Obiettivo: <strong style={{ color: 'hsl(var(--foreground))' }}>{Math.round(target)} kcal</strong>
                 </p>
                 {dailyError ? (
-                  <p style={{ fontSize: 12, color: '#ef4444', marginTop: 6 }}>
+                  <p style={{ fontSize: 12, color: 'hsl(var(--destructive))', marginTop: 6 }}>
                     Impossibile caricare i dati, riprova
                   </p>
                 ) : !macros && (
-                  <p style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
+                  <p style={{ fontSize: 12, color: 'hsl(var(--content-tertiary))', marginTop: 6 }}>
                     Nessun pasto registrato oggi
                   </p>
                 )}
               </div>
 
               {/* Macro */}
-              <div style={{
-                background: '#111118',
-                border: '1px solid #1e1e2e',
-                borderRadius: 20,
-                padding: 24,
-              }}>
+              <div className="card">
                 <CapLabel>Macronutrienti</CapLabel>
                 <div style={{ marginTop: 18 }}>
                   <MacroBar
@@ -336,21 +316,21 @@ export default function NutritionPage() {
                     consumed={protein?.consumed ?? 0}
                     target={protein?.target ?? plan?.proteinG ?? 150}
                     unit="g"
-                    gradient="linear-gradient(90deg,#6366f1,#8b5cf6)"
+                    color="hsl(var(--primary))"
                   />
                   <MacroBar
                     label="Carboidrati"
                     consumed={carbs?.consumed ?? 0}
                     target={carbs?.target ?? plan?.carbsG ?? 250}
                     unit="g"
-                    gradient="linear-gradient(90deg,#22c55e,#4ade80)"
+                    color="hsl(var(--success))"
                   />
                   <MacroBar
                     label="Grassi"
                     consumed={fat?.consumed ?? 0}
                     target={fat?.target ?? plan?.fatG ?? 70}
                     unit="g"
-                    gradient="linear-gradient(90deg,#f59e0b,#fbbf24)"
+                    color="hsl(var(--warning))"
                   />
                 </div>
 
@@ -358,17 +338,12 @@ export default function NutritionPage() {
                 <button
                   onClick={() => generateMutation.mutate()}
                   disabled={generateMutation.isPending}
+                  className="btn-secondary rounded-xl"
                   style={{
                     marginTop: 16,
                     width: '100%',
                     padding: '9px 15px',
-                    border: '1px solid #2a2a3a',
-                    borderRadius: 11,
-                    background: '#1a1a24',
-                    color: '#a1a1b5',
                     fontSize: 13,
-                    fontWeight: 600,
-                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -382,14 +357,7 @@ export default function NutritionPage() {
             </div>
 
             {/* ── RIGHT COLUMN ── */}
-            <div style={{
-              background: '#111118',
-              border: '1px solid #1e1e2e',
-              borderRadius: 20,
-              padding: 24,
-              display: 'flex',
-              flexDirection: 'column',
-            }}>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
               {/* header */}
               <div style={{
                 display: 'flex', alignItems: 'center',
@@ -398,10 +366,10 @@ export default function NutritionPage() {
                 <CapLabel>Pasti di oggi</CapLabel>
                 <button
                   onClick={() => setMealModalOpen(true)}
+                  className="btn-hero rounded-xl"
                   style={{
-                    padding: '9px 15px', border: 'none', borderRadius: 11,
-                    background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                    color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    padding: '9px 15px',
+                    fontSize: 13,
                     display: 'flex', alignItems: 'center', gap: 7,
                   }}
                 >
@@ -418,16 +386,13 @@ export default function NutritionPage() {
                   alignItems: 'center', justifyContent: 'center',
                   gap: 12, textAlign: 'center',
                 }}>
-                  <p style={{ fontSize: 15, fontWeight: 600, color: '#e7e7ee', margin: 0 }}>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))', margin: 0 }}>
                     Impossibile caricare i dati, riprova
                   </p>
                   <button
                     onClick={() => refetchDaily()}
-                    style={{
-                      padding: '9px 15px', border: '1px solid #2a2a3a', borderRadius: 11,
-                      background: '#1a1a24', color: '#a1a1b5', fontSize: 13, fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
+                    className="btn-secondary rounded-xl"
+                    style={{ padding: '9px 15px', fontSize: 13 }}
                   >
                     Riprova
                   </button>
@@ -443,10 +408,9 @@ export default function NutritionPage() {
                     return (
                       <div
                         key={log.id}
+                        className="card-inner"
                         style={{
-                          background: '#15151d',
-                          border: '1px solid #1e1e2e',
-                          borderRadius: 14,
+                          borderRadius: 12,
                           padding: 15,
                           display: 'flex',
                           alignItems: 'center',
@@ -454,23 +418,16 @@ export default function NutritionPage() {
                         }}
                       >
                         {/* icon tile */}
-                        <div style={{
-                          width: 44, height: 44, borderRadius: 11,
-                          background: '#1a1a24',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 20, flexShrink: 0,
-                        }}>
-                          {MEAL_EMOJI[type] ?? '🍽️'}
-                        </div>
+                        <MealIcon type={type} />
                         {/* name + meta */}
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <p style={{
-                            fontSize: 14, fontWeight: 600, color: '#e7e7ee',
+                            fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))',
                             margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                           }}>
                             {log.foodItem?.name ?? 'Alimento'}
                           </p>
-                          <p style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 0' }}>
+                          <p style={{ fontSize: 12, color: 'hsl(var(--content-tertiary))', margin: '2px 0 0' }}>
                             {MEAL_LABELS[type] ?? type}
                             {loggedAt ? ` · ${loggedAt}` : ''}
                             {` · P ${Math.round((log.foodItem?.proteinG ?? 0) * log.servings)}g`}
@@ -480,10 +437,10 @@ export default function NutritionPage() {
                         </div>
                         {/* kcal */}
                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <span style={{ fontSize: 15, fontWeight: 700, color: '#e7e7ee' }}>
+                          <span style={{ fontSize: 15, fontWeight: 700, color: 'hsl(var(--foreground))' }}>
                             {kcal}
                           </span>
-                          <span style={{ fontSize: 11, color: '#6b7280', marginLeft: 3 }}>kcal</span>
+                          <span style={{ fontSize: 11, color: 'hsl(var(--content-tertiary))', marginLeft: 3 }}>kcal</span>
                         </div>
                       </div>
                     );
@@ -499,23 +456,23 @@ export default function NutritionPage() {
                 }}>
                   <div style={{
                     width: 56, height: 56, borderRadius: 16,
-                    background: '#1a1a24',
+                    background: 'hsl(var(--surface-3))',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <Utensils size={24} color="#6b7280" />
+                    <Utensils size={24} color="hsl(var(--content-tertiary))" />
                   </div>
-                  <p style={{ fontSize: 15, fontWeight: 600, color: '#e7e7ee', margin: 0 }}>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))', margin: 0 }}>
                     Nessun pasto registrato oggi
                   </p>
-                  <p style={{ fontSize: 13, color: '#6b7280', maxWidth: 280, margin: 0 }}>
+                  <p style={{ fontSize: 13, color: 'hsl(var(--content-tertiary))', maxWidth: 280, margin: 0 }}>
                     Inizia a tracciare i tuoi pasti per vedere il progresso verso i tuoi obiettivi.
                   </p>
                   <button
                     onClick={() => setMealModalOpen(true)}
+                    className="btn-secondary rounded-xl"
                     style={{
-                      padding: '9px 15px', border: 'none', borderRadius: 11,
-                      background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                      color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      padding: '9px 15px',
+                      fontSize: 13,
                       display: 'flex', alignItems: 'center', gap: 8, marginTop: 4,
                     }}
                   >

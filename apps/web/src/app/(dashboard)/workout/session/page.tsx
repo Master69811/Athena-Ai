@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import { useWorkoutStore } from '@/store/workout.store';
 import { useRouter } from 'next/navigation';
 import { X, Check, Plus, Minus, Gauge } from 'lucide-react';
+import { Modal } from '@/components/ui/modal';
+import { Button } from '@/components/ui/button';
 
 const RPE_LABELS: Record<number, string> = {
   6: 'Facile', 7: 'Moderato', 8: 'Difficile', 9: 'Molto Difficile', 10: 'Massimale',
@@ -22,7 +24,7 @@ type ReadinessAdaptation = {
 };
 
 const READINESS_BANNER: Record<ReadinessAdaptation['color'], React.CSSProperties> = {
-  green:  { background: 'rgba(34,197,94,.10)',  border: '1px solid rgba(34,197,94,.25)',  color: '#4ade80' },
+  green:  { background: 'rgba(34,197,94,.10)',  border: '1px solid rgba(34,197,94,.25)',  color: 'hsl(var(--success))' },
   yellow: { background: 'rgba(234,179,8,.10)',  border: '1px solid rgba(234,179,8,.25)',  color: '#facc15' },
   orange: { background: 'rgba(249,115,22,.10)', border: '1px solid rgba(249,115,22,.25)', color: '#fb923c' },
   red:    { background: 'rgba(239,68,68,.10)',  border: '1px solid rgba(239,68,68,.25)',  color: '#f87171' },
@@ -57,6 +59,7 @@ export default function SessionPage() {
   const [aiRecommendation, setAiRecommendation] = useState<string | null>(null);
   const [completedSets, setCompletedSets] = useState<any[]>([]);
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   const elapsed = useElapsed(sessionStarted);
 
@@ -224,14 +227,10 @@ export default function SessionPage() {
   if (!activePlan) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 16 }}>
-        <p style={{ color: '#a1a1b5' }}>Nessun programma attivo.</p>
+        <p style={{ color: 'hsl(var(--content-secondary))' }}>Nessun programma attivo.</p>
         <button
           onClick={() => router.push('/workout')}
-          style={{
-            background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none',
-            borderRadius: 10, padding: '11px 24px', color: '#fff', fontWeight: 700,
-            fontSize: 14, cursor: 'pointer', boxShadow: '0 10px 30px rgba(99,102,241,.35)',
-          }}
+          className="btn-hero inline-flex items-center rounded-xl px-6 h-11 text-sm font-bold"
         >
           Crea Piano AI
         </button>
@@ -243,57 +242,32 @@ export default function SessionPage() {
   const exerciseSets = completedSets.filter(s => s.exerciseId === currentExercise?.exerciseId);
 
   return (
-    <div style={{ maxWidth: 1180, margin: '0 auto', animation: 'fadeUp .4s ease', paddingBottom: 40 }}>
-      <style>{`
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(16px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .step-btn:hover { border-color: #6366f1 !important; }
-        .rpe-chip:hover { opacity: .85; }
-        .ctrl-btn:hover { opacity: .85; }
-        .ex-item:hover { background: rgba(99,102,241,.04); }
-        .step-btn, .rpe-chip, .ctrl-btn, .ex-item { transition: all .15s ease; }
-      `}</style>
-
+    <div className="animate-fade-up" style={{ maxWidth: 1180, margin: '0 auto', paddingBottom: 40 }}>
       {/* ── Top header ─────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
-          <h1 style={{ color: '#e7e7ee', fontWeight: 800, fontSize: 22, margin: 0, lineHeight: 1.2 }}>
+          <h1 style={{ color: 'hsl(var(--foreground))', fontWeight: 700, fontSize: 22, margin: 0, lineHeight: 1.2 }}>
             {currentDay?.name ?? 'Sessione'}
           </h1>
-          <p style={{ color: '#6b7280', fontSize: 13, margin: '4px 0 0' }}>
+          <p style={{ color: 'hsl(var(--content-tertiary))', fontSize: 13, margin: '4px 0 0' }}>
             Esercizio {currentExIdx + 1} di {totalExercises || 1} · {fmt(elapsed)} trascorsi
           </p>
         </div>
         <button
-          onClick={() => {
-            if (window.confirm('Vuoi terminare l\'allenamento? I progressi non salvati andranno persi.')) {
-              router.push('/workout');
-            }
-          }}
+          onClick={() => setShowExitConfirm(true)}
           aria-label="Esci dall'allenamento"
-          style={{
-            width: 40, height: 40, background: '#1a1a24', border: '1px solid #2a2a3a',
-            borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', color: '#a1a1b5', flexShrink: 0,
-          }}
+          className="w-10 h-10 rounded-xl bg-surface-3 border border-border-strong flex items-center justify-center text-content-secondary flex-shrink-0"
         >
           <X size={18} />
         </button>
       </div>
 
       {/* ── Progress bar ───────────────────────────────── */}
-      <div style={{
-        height: 6, background: '#15151d', borderRadius: 4, overflow: 'hidden', marginBottom: 20,
-      }}>
-        <div style={{
-          height: '100%', width: `${progressPct}%`,
-          background: 'linear-gradient(90deg,#6366f1,#8b5cf6)',
-          boxShadow: '0 0 12px rgba(99,102,241,.6)',
-          transition: 'width .4s ease',
-          borderRadius: 4,
-        }} />
+      <div className="bg-surface-3 rounded-lg overflow-hidden mb-5" style={{ height: 6 }}>
+        <div
+          className="h-full rounded-lg"
+          style={{ width: `${progressPct}%`, background: 'hsl(var(--primary))', transition: 'width .4s ease' }}
+        />
       </div>
 
       {/* ── Recovery adaptation banner ─────────────────── */}
@@ -323,10 +297,7 @@ export default function SessionPage() {
       }}>
 
         {/* LEFT — exercise list */}
-        <div style={{
-          background: '#111118', border: '1px solid #1e1e2e', borderRadius: 18, padding: 14,
-          display: 'flex', flexDirection: 'column', gap: 6,
-        }}>
+        <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {exercises.map((ex: any, i: number) => {
             const exSets = completedSets.filter(s => s.exerciseId === ex.exerciseId);
             const isActive = i === currentExIdx;
@@ -336,13 +307,13 @@ export default function SessionPage() {
             return (
               <div
                 key={ex.id ?? i}
-                className="ex-item"
                 onClick={() => { setCurrentExIdx(i); setCurrentSet(1); setAiRecommendation(null); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '11px 10px',
                   borderRadius: 12, cursor: 'pointer',
                   border: isActive ? '1px solid rgba(99,102,241,.4)' : '1px solid transparent',
                   background: isActive ? 'rgba(99,102,241,.08)' : 'transparent',
+                  transition: 'background .15s ease',
                 }}
               >
                 {/* Badge */}
@@ -351,10 +322,10 @@ export default function SessionPage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: 11, fontWeight: 700,
                   ...(isDone
-                    ? { background: 'rgba(34,197,94,.16)', color: '#4ade80' }
+                    ? { background: 'rgba(34,197,94,.16)', color: 'hsl(var(--success))' }
                     : isActive
-                    ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff' }
-                    : { background: '#1a1a24', color: '#6b7280' }),
+                    ? { background: 'hsl(var(--primary))', color: '#fff' }
+                    : { background: 'hsl(var(--surface-3))', color: 'hsl(var(--content-tertiary))' }),
                 }}>
                   {isDone ? <Check size={12} /> : i + 1}
                 </div>
@@ -362,12 +333,12 @@ export default function SessionPage() {
                 <div style={{ minWidth: 0 }}>
                   <p style={{
                     margin: 0, fontSize: 13, fontWeight: 600,
-                    color: isActive ? '#e7e7ee' : '#a1a1b5',
+                    color: isActive ? 'hsl(var(--foreground))' : 'hsl(var(--content-secondary))',
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
                     {ex.exercise?.name ?? `Esercizio ${i + 1}`}
                   </p>
-                  <p style={{ margin: 0, fontSize: 11, color: '#6b7280' }}>
+                  <p style={{ margin: 0, fontSize: 11, color: 'hsl(var(--content-tertiary))' }}>
                     {exSets.length}/{adaptEx} serie
                   </p>
                 </div>
@@ -380,16 +351,13 @@ export default function SessionPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {currentExercise ? (
-            <div style={{
-              background: '#111118', border: '1px solid rgba(99,102,241,.22)', borderRadius: 18,
-              padding: 24, boxShadow: '0 0 45px rgba(99,102,241,.1)',
-            }}>
+            <div className="card">
               {/* Exercise name + target */}
               <div style={{ marginBottom: 20 }}>
-                <h2 style={{ margin: 0, color: '#e7e7ee', fontSize: 20, fontWeight: 800, lineHeight: 1.2 }}>
+                <h2 style={{ margin: 0, color: 'hsl(var(--foreground))', fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>
                   {currentExercise.exercise?.name ?? 'Esercizio'}
                 </h2>
-                <p style={{ margin: '5px 0 0', color: '#6b7280', fontSize: 13 }}>
+                <p style={{ margin: '5px 0 0', color: 'hsl(var(--content-tertiary))', fontSize: 13 }}>
                   {adaptedSets} serie · {currentExercise.repsMin}–{currentExercise.repsMax} rip · RPE {adaptedRpeTarget}
                 </p>
               </div>
@@ -397,35 +365,23 @@ export default function SessionPage() {
               {/* Steppers grid */}
               <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 20 }}>
                 {/* Weight */}
-                <div style={{
-                  background: '#15151d', border: '1px solid #1e1e2e', borderRadius: 14, padding: 16, textAlign: 'center',
-                }}>
-                  <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '.14em', color: '#6b7280', textTransform: 'uppercase' }}>
+                <div className="card-inner" style={{ textAlign: 'center' }}>
+                  <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '.14em', color: 'hsl(var(--content-tertiary))', textTransform: 'uppercase' }}>
                     Peso (kg)
                   </p>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
                     <button
-                      className="step-btn"
                       onClick={() => setWeight(w => Math.max(0, Math.round((w - 2.5) * 10) / 10))}
-                      style={{
-                        width: 40, height: 40, borderRadius: 10, background: '#1a1a24',
-                        border: '1px solid #2a2a3a', color: '#e7e7ee', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}
+                      className="w-10 h-10 rounded-xl bg-surface-3 border border-border-strong text-foreground flex items-center justify-center"
                     >
                       <Minus size={14} />
                     </button>
-                    <span style={{ fontSize: 34, fontWeight: 800, color: '#e7e7ee', minWidth: 64, display: 'block', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                    <span className="font-bold tabular-nums" style={{ fontSize: 34, color: 'hsl(var(--foreground))', minWidth: 64, display: 'block', textAlign: 'center' }}>
                       {weight}
                     </span>
                     <button
-                      className="step-btn"
                       onClick={() => setWeight(w => Math.round((w + 2.5) * 10) / 10)}
-                      style={{
-                        width: 40, height: 40, borderRadius: 10, background: '#1a1a24',
-                        border: '1px solid #2a2a3a', color: '#e7e7ee', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}
+                      className="w-10 h-10 rounded-xl bg-surface-3 border border-border-strong text-foreground flex items-center justify-center"
                     >
                       <Plus size={14} />
                     </button>
@@ -433,35 +389,23 @@ export default function SessionPage() {
                 </div>
 
                 {/* Reps */}
-                <div style={{
-                  background: '#15151d', border: '1px solid #1e1e2e', borderRadius: 14, padding: 16, textAlign: 'center',
-                }}>
-                  <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '.14em', color: '#6b7280', textTransform: 'uppercase' }}>
+                <div className="card-inner" style={{ textAlign: 'center' }}>
+                  <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '.14em', color: 'hsl(var(--content-tertiary))', textTransform: 'uppercase' }}>
                     Ripetizioni
                   </p>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
                     <button
-                      className="step-btn"
                       onClick={() => setReps(r => Math.max(1, r - 1))}
-                      style={{
-                        width: 40, height: 40, borderRadius: 10, background: '#1a1a24',
-                        border: '1px solid #2a2a3a', color: '#e7e7ee', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}
+                      className="w-10 h-10 rounded-xl bg-surface-3 border border-border-strong text-foreground flex items-center justify-center"
                     >
                       <Minus size={14} />
                     </button>
-                    <span style={{ fontSize: 34, fontWeight: 800, color: '#e7e7ee', minWidth: 48, display: 'block', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                    <span className="font-bold tabular-nums" style={{ fontSize: 34, color: 'hsl(var(--foreground))', minWidth: 48, display: 'block', textAlign: 'center' }}>
                       {reps}
                     </span>
                     <button
-                      className="step-btn"
                       onClick={() => setReps(r => r + 1)}
-                      style={{
-                        width: 40, height: 40, borderRadius: 10, background: '#1a1a24',
-                        border: '1px solid #2a2a3a', color: '#e7e7ee', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}
+                      className="w-10 h-10 rounded-xl bg-surface-3 border border-border-strong text-foreground flex items-center justify-center"
                     >
                       <Plus size={14} />
                     </button>
@@ -471,22 +415,19 @@ export default function SessionPage() {
 
               {/* RPE selector */}
               <div style={{ marginBottom: 20 }}>
-                <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, letterSpacing: '.14em', color: '#6b7280', textTransform: 'uppercase' }}>
+                <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, letterSpacing: '.14em', color: 'hsl(var(--content-tertiary))', textTransform: 'uppercase' }}>
                   RPE — {RPE_LABELS[rpe] ?? ''}
                 </p>
                 <div style={{ display: 'flex', gap: 8 }}>
                   {[6, 7, 8, 9, 10].map(r => (
                     <button
                       key={r}
-                      className="rpe-chip"
                       onClick={() => setRpe(r)}
-                      style={{
-                        flex: 1, padding: '9px 0', borderRadius: 10, fontSize: 14, fontWeight: 700,
-                        cursor: 'pointer', border: 'none',
-                        ...(rpe === r
-                          ? { background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: '#fff' }
-                          : { background: '#15151d', border: '1px solid #2a2a3a', color: '#a1a1b5' }),
-                      }}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-bold ${
+                        rpe === r
+                          ? 'bg-primary text-white'
+                          : 'bg-surface-elevated border border-border-strong text-content-secondary'
+                      }`}
                     >
                       {r}
                     </button>
@@ -500,31 +441,23 @@ export default function SessionPage() {
                   <div style={{
                     flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0,
                     background: 'rgba(99,102,241,.08)', border: '1px solid rgba(99,102,241,.22)',
-                    borderRadius: 13, padding: '0 16px', height: 46,
+                    borderRadius: 12, padding: '0 16px', height: 46,
                   }}>
                     <div style={{
                       width: 24, height: 24, borderRadius: 7, flexShrink: 0,
                       background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontSize: 11, fontWeight: 800,
+                      color: '#fff', fontSize: 11, fontWeight: 700,
                     }}>A</div>
-                    <p style={{ margin: 0, color: '#a1a1b5', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <p style={{ margin: 0, color: 'hsl(var(--content-secondary))', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {aiRecommendation}
                     </p>
                   </div>
                 )}
                 <button
-                  className="ctrl-btn"
                   onClick={() => handleLogSet(false)}
                   disabled={logSetMutation.isPending}
-                  style={{
-                    background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                    border: 'none', borderRadius: 12, padding: '12px 22px',
-                    color: '#fff', fontWeight: 700, fontSize: 14,
-                    boxShadow: '0 10px 30px rgba(99,102,241,.35)',
-                    cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                    display: 'flex', alignItems: 'center', gap: 7,
-                  }}
+                  className="btn-hero inline-flex items-center gap-2 rounded-xl px-6 h-11 text-sm font-semibold whitespace-nowrap flex-shrink-0"
                 >
                   <Check size={15} />
                   {logSetMutation.isPending ? 'Salvo...' : `Registra serie ${currentSet}`}
@@ -536,7 +469,7 @@ export default function SessionPage() {
                 onClick={() => handleLogSet(true)}
                 style={{
                   background: 'none', border: 'none', padding: 0,
-                  color: '#6b7280', fontSize: 12, cursor: 'pointer',
+                  color: 'hsl(var(--content-tertiary))', fontSize: 12, cursor: 'pointer',
                   textDecoration: 'underline', textDecorationStyle: 'dotted',
                 }}
               >
@@ -547,72 +480,58 @@ export default function SessionPage() {
               {exerciseSets.length > 0 && (
                 <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {exerciseSets.map((s: any, i: number) => (
-                    <div key={i} style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      background: '#15151d', border: '1px solid #1e1e2e',
-                      borderRadius: 11, padding: '10px 14px',
-                    }}>
+                    <div key={i} className="card-inner" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }}>
                       <div style={{
                         width: 20, height: 20, borderRadius: 6, flexShrink: 0,
                         background: 'rgba(34,197,94,.16)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
-                        <Check size={11} color="#4ade80" />
+                        <Check size={11} color="hsl(var(--success))" />
                       </div>
-                      <span style={{ color: '#c4c4d4', fontSize: 13, flex: 1 }}>
+                      <span style={{ color: 'hsl(var(--content-secondary))', fontSize: 13, flex: 1 }}>
                         <strong>{s.weightKg}kg × {s.reps}</strong>
                       </span>
-                      <span style={{ color: '#6b7280', fontSize: 12 }}>RPE {s.rpe}</span>
+                      <span style={{ color: 'hsl(var(--content-tertiary))', fontSize: 12 }}>RPE {s.rpe}</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
           ) : (
-            <div style={{
-              background: '#111118', border: '1px solid #1e1e2e', borderRadius: 18,
-              padding: 40, textAlign: 'center', color: '#6b7280',
-            }}>
+            <div className="card" style={{ padding: 40, textAlign: 'center', color: 'hsl(var(--content-tertiary))' }}>
               Nessun esercizio disponibile
             </div>
           )}
 
           {/* Rest timer card */}
-          <div style={{
-            background: '#111118', border: '1px solid #1e1e2e', borderRadius: 18, padding: 22,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
-          }}>
+          <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
             <div>
-              <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, letterSpacing: '.14em', color: '#6b7280', textTransform: 'uppercase' }}>
+              <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, letterSpacing: '.14em', color: 'hsl(var(--content-tertiary))', textTransform: 'uppercase' }}>
                 Recupero
               </p>
-              <span style={{
-                fontSize: 40, fontWeight: 800, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
-                color: isResting && restSeconds > 0 ? '#8b5cf6' : '#2a2a3a',
-              }}>
-                {fmt(restSeconds)}
+              <span
+                className="font-bold tabular-nums"
+                style={{
+                  fontSize: 40, lineHeight: 1,
+                  color: isResting && restSeconds > 0 ? 'hsl(var(--accent))' : undefined,
+                }}
+                {...(!(isResting && restSeconds > 0) ? {} : {})}
+              >
+                <span className={isResting && restSeconds > 0 ? '' : 'text-content-disabled'} style={isResting && restSeconds > 0 ? { color: 'hsl(var(--accent))' } : undefined}>
+                  {fmt(restSeconds)}
+                </span>
               </span>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
-                className="ctrl-btn"
                 onClick={() => { setIsResting(true); setRestSeconds(s => s + 30); }}
-                style={{
-                  background: '#1a1a24', border: '1px solid #2a2a3a', borderRadius: 10,
-                  padding: '8px 14px', color: '#a1a1b5', fontSize: 13, fontWeight: 600,
-                  cursor: 'pointer',
-                }}
+                className="btn-secondary rounded-xl px-4 h-9 text-sm"
               >
                 +30s
               </button>
               <button
-                className="ctrl-btn"
                 onClick={() => { setIsResting(false); setRestSeconds(0); }}
-                style={{
-                  background: '#1a1a24', border: '1px solid #2a2a3a', borderRadius: 10,
-                  padding: '8px 14px', color: '#a1a1b5', fontSize: 13, fontWeight: 600,
-                  cursor: 'pointer',
-                }}
+                className="btn-secondary rounded-xl px-4 h-9 text-sm"
               >
                 Salta
               </button>
@@ -623,12 +542,8 @@ export default function SessionPage() {
           <div style={{ display: 'flex', gap: 10 }}>
             {currentExIdx > 0 && (
               <button
-                className="ctrl-btn"
                 onClick={() => setCurrentExIdx(i => i - 1)}
-                style={{
-                  background: '#1a1a24', border: '1px solid #2a2a3a', borderRadius: 10,
-                  padding: '11px 18px', color: '#a1a1b5', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                }}
+                className="btn-secondary rounded-xl px-5 h-11 text-sm"
               >
                 ← Prec.
               </button>
@@ -636,27 +551,16 @@ export default function SessionPage() {
 
             {currentExIdx < totalExercises - 1 ? (
               <button
-                className="ctrl-btn"
                 onClick={handleNextExercise}
-                style={{
-                  flex: 1, background: '#1a1a24', border: '1px solid #2a2a3a', borderRadius: 10,
-                  padding: '11px 18px', color: '#a1a1b5', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                }}
+                className="btn-secondary flex-1 rounded-xl px-5 h-11 text-sm"
               >
                 Prossimo esercizio →
               </button>
             ) : (
               <button
-                className="ctrl-btn"
                 onClick={handleCompleteSession}
                 disabled={completeMutation.isPending}
-                style={{
-                  flex: 1,
-                  background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', border: 'none',
-                  borderRadius: 10, padding: '11px 18px',
-                  color: '#fff', fontSize: 13, fontWeight: 700,
-                  cursor: 'pointer', boxShadow: '0 10px 30px rgba(99,102,241,.35)',
-                }}
+                className="btn-secondary flex-1 rounded-xl px-5 h-11 text-sm"
               >
                 {completeMutation.isPending ? 'Completamento...' : 'Completa allenamento ✓'}
               </button>
@@ -664,6 +568,22 @@ export default function SessionPage() {
           </div>
         </div>
       </div>
+
+      <Modal
+        open={showExitConfirm}
+        onClose={() => setShowExitConfirm(false)}
+        title="Terminare l'allenamento?"
+        description="I progressi non salvati andranno persi."
+      >
+        <div className="flex gap-3 pt-1">
+          <Button type="button" variant="outline" className="flex-1" onClick={() => setShowExitConfirm(false)}>
+            Annulla
+          </Button>
+          <Button type="button" variant="destructive" className="flex-1" onClick={() => router.push('/workout')}>
+            Termina
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
