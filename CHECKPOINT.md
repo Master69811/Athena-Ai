@@ -73,6 +73,25 @@ Dopo deploy confermato live (commit de788d9) + utente ha aggiunto `GEMINI_MODEL=
 - Considerare upgrade Render da Free a Starter ($7/mo) per evitare cold-start di 50s
 - Ri-ingest della knowledge base RAG su Qdrant (ora che QDRANT_API_KEY è configurata)
 
+## 🎨 Refactoring grafico completo (17/07, sera) — commit `bb3d38b` → `e4825ab`
+
+Audit di design con Fable 5 (agente pianificazione) + esecuzione via 6 agenti paralleli (2 completati automaticamente prima del limite di sessione API, 4 completati manualmente da me dopo l'interruzione). Diagnosi: due sistemi di stile in conflitto (classi vs centinaia di hex inline), glow colorati ovunque, nessuna scala tipografica/spaziatura/border-radius coerente, emoji come icone primarie insieme a lucide-react.
+
+**Sistema di design implementato** (Batch 0, `bb3d38b`):
+- Nuova scala colori a gradoni in `globals.css` (background/surface-1/2/3, border-subtle/strong, gerarchia testo, semantici success/warning/danger/info)
+- Scala tipografica a 6 livelli (`.text-display/title/heading/body/caption/label-caps`)
+- Sistema elevazione a 3 livelli (`.card`/`.card-inner`/`.card-overlay` + `.card-interactive`)
+- Classi bottoni (`.btn-hero` per l'UNICA CTA gradiente per schermata, `.btn-primary`, `.btn-secondary`, `.chip`/`.chip-active`)
+- Scala border-radius consolidata a 3 valori (8/12/16px)
+- Supporto `prefers-reduced-motion`
+- Alias di retrocompatibilità (`.glass-card`, `.card-athena`) per non rompere nulla durante la migrazione
+
+**6 batch di migrazione pagine** (`1527c3d` → `e4825ab`): dashboard, layout (sidebar/topbar/mobile-nav/nav-items), auth+onboarding, workout+sessione live, nutrizione+recupero+progressi, coach+impostazioni+achievement. Rimossi: tutti i tag `<style>` locali ridondanti, tutte le emoji-come-icona (sostituite con lucide-react), tutti i glow colorati decorativi, il logo pulsante infinito, il badge "Sync" finto, la texture hex-grid di sfondo, gli handler onMouseEnter/Leave JS per hover (sostituiti da classi CSS).
+
+**Verificato**: 51/51 test web passano, build produzione pulita (20/20 route), zero nuovi errori TypeScript. Hex rimanenti sono eccezioni intenzionali consentite dal piano (colori linee grafici Recharts, gradiente "avatar Athena AI", colori semantici di rarità achievement).
+
+**PROSSIMO STEP**: aspettare redeploy Vercel del commit `e4825ab` e verificare visivamente l'app nel browser.
+
 ## ➡️ PROSSIMI PASSI (in ordine)
 1. **Test + build** dei 2 file sopra: `cd apps/api && pnpm exec jest --silent && pnpm exec nest build` per il backend; per il frontend verificare tsc/build Next.js
 2. **Commit + push** di questi 2 file (branch `claude/ai-fitness-platform-Ovwzu`)
