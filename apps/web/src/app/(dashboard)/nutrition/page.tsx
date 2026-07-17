@@ -227,6 +227,7 @@ export default function NutritionPage() {
       queryClient.invalidateQueries({ queryKey: ['nutrition-plan'] });
       toast.success('Piano nutrizionale generato da Athena!');
     },
+    onError: (e: any) => toast.error(e?.message || 'Generazione piano fallita, riprova'),
   });
 
   const logMutation = useMutation({

@@ -10,22 +10,13 @@ import { getMuscleGroupLabel } from '@/lib/utils';
 
 const DAY_NAMES_SHORT = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
 
-const FALLBACK_DAYS = [
-  { id: 'f0', dayIndex: 0, name: 'Push · Forza', muscleGroups: ['chest', 'shoulders', 'triceps'], rpeTarget: 8, exercises: [] },
-  { id: 'f1', dayIndex: 1, name: 'Pull · Ipertrofia', muscleGroups: ['back', 'biceps'], rpeTarget: 7, exercises: [] },
-  { id: 'f2', dayIndex: 2, name: 'Recupero attivo', muscleGroups: ['cardio'], rpeTarget: 5, exercises: [] },
-  { id: 'f3', dayIndex: 3, name: 'Legs · Forza', muscleGroups: ['quads', 'hamstrings', 'glutes'], rpeTarget: 9, exercises: [] },
-  { id: 'f4', dayIndex: 4, name: 'Upper · Pump', muscleGroups: ['chest', 'back', 'shoulders'], rpeTarget: 7, exercises: [] },
-  { id: 'f5', dayIndex: 5, name: 'Riposo', muscleGroups: [], rpeTarget: 0, exercises: [] },
-];
-
 const todayDayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
 
 export default function WorkoutPage() {
   const queryClient = useQueryClient();
-  const [selectedWeek, setSelectedWeek] = useState(6);
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
 
-  const { data: plan, isLoading, isError } = useQuery({
+  const { data: plan, isLoading } = useQuery({
     queryKey: ['active-plan'],
     queryFn: workoutApi.getActivePlan,
     select: (res: any) => res.data,
@@ -40,9 +31,10 @@ export default function WorkoutPage() {
     onError: () => toast.error('Errore nella generazione. Riprova.'),
   });
 
-  const days: any[] = plan?.days?.length ? plan.days : FALLBACK_DAYS;
+  const days: any[] = plan?.days ?? [];
   const totalWeeks: number = plan?.durationWeeks ?? 12;
-  const currentWeek: number = plan?.currentWeek ?? 6;
+  const currentWeek: number = plan?.currentWeek ?? 1;
+  const activeWeek: number = selectedWeek ?? currentWeek;
 
   if (isLoading) {
     return (
@@ -72,7 +64,7 @@ export default function WorkoutPage() {
         .generate-btn { transition: opacity .15s; cursor: pointer; }
       `}</style>
 
-      {isError && !plan ? (
+      {!plan ? (
         /* Empty state */
         <div style={{
           background: '#111118', border: '1px solid #1e1e2e', borderRadius: 20, padding: 48,
@@ -140,7 +132,7 @@ export default function WorkoutPage() {
             scrollbarWidth: 'none',
           }}>
             {Array.from({ length: totalWeeks }, (_, i) => i + 1).map(w => {
-              const isActive = w === selectedWeek;
+              const isActive = w === activeWeek;
               return (
                 <button
                   key={w}
@@ -170,6 +162,12 @@ export default function WorkoutPage() {
               );
             })}
           </div>
+
+          {selectedWeek !== null && selectedWeek !== currentWeek && (
+            <p style={{ color: '#6b7280', fontSize: 12.5, marginTop: -16, marginBottom: 24 }}>
+              Programmazione invariata per questa settimana.
+            </p>
+          )}
 
           {/* Day grid */}
           <div style={{

@@ -35,18 +35,6 @@ const RARITY_LABEL: Record<Rarity, string> = {
   LEGENDARY: 'LEGGENDARIO',
 };
 
-/* ─── Fallback data ─── */
-const FALLBACK_ACHIEVEMENTS = [
-  { id: 'f1', nameIt: 'Costanza',    descriptionIt: '14 giorni di fila',        rarity: 'COMMON'    as Rarity, points: 100,  earned: true,  icon: '🔥' },
-  { id: 'f2', nameIt: '100kg Club',  descriptionIt: 'Panca a 100 kg',           rarity: 'RARE'      as Rarity, points: 250,  earned: true,  icon: '🏋️' },
-  { id: 'f3', nameIt: 'Volume Beast',descriptionIt: '40t a settimana',          rarity: 'EPIC'      as Rarity, points: 500,  earned: true,  icon: '💪' },
-  { id: 'f4', nameIt: 'Sonno d\'oro',descriptionIt: '7 notti da 8h+',           rarity: 'RARE'      as Rarity, points: 250,  earned: true,  icon: '😴' },
-  { id: 'f5', nameIt: 'PR Hunter',   descriptionIt: '10 record personali',      rarity: 'EPIC'      as Rarity, points: 500,  earned: true,  icon: '⚡' },
-  { id: 'f6', nameIt: 'Centurione',  descriptionIt: '100 sessioni totali',      rarity: 'LEGENDARY' as Rarity, points: 1000, earned: false, icon: '🏆' },
-  { id: 'f7', nameIt: 'Precisione',  descriptionIt: 'Macro centrate per 30gg', rarity: 'RARE'      as Rarity, points: 250,  earned: false, icon: '🎯' },
-  { id: 'f8', nameIt: 'Notturno',    descriptionIt: 'Deload perfetto',          rarity: 'COMMON'    as Rarity, points: 100,  earned: false, icon: '🌑' },
-];
-
 const LABEL_CAPS: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
@@ -62,17 +50,14 @@ export default function AchievementsPage() {
     select: (res: any) => res.data,
   });
 
-  const achievements: any[] = (() => {
-    const arr = Array.isArray(data?.achievements) ? data.achievements : [];
-    return arr.length > 0 ? arr : FALLBACK_ACHIEVEMENTS;
-  })();
+  const achievements: any[] = Array.isArray(data?.achievements) ? data.achievements : [];
 
   const totalPoints  = data?.totalPoints  ?? achievements.filter(a => a.earned).reduce((s: number, a: any) => s + (a.points ?? 0), 0);
   const earnedCount  = data?.earnedCount  ?? achievements.filter((a: any) => a.earned).length;
   const totalCount   = data?.totalCount   ?? achievements.length;
   const progressPct  = totalCount > 0 ? Math.round((earnedCount / totalCount) * 100) : 0;
 
-  const displayPoints = totalPoints > 0 ? totalPoints : 3480;
+  const displayPoints = totalPoints ?? 0;
 
   return (
     <>

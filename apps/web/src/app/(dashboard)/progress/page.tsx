@@ -43,12 +43,13 @@ const INNER_SURFACE: React.CSSProperties = {
   padding: 16,
 };
 
-const measurementsFallback = [
-  { label: 'Petto',  value: 106,  unit: 'cm', delta: +1.5 },
-  { label: 'Vita',   value: 81,   unit: 'cm', delta: -2.0 },
-  { label: 'Fianchi', value: 97,  unit: 'cm', delta: -1.0 },
-  { label: 'Coscia', value: 61,   unit: 'cm', delta: +0.5 },
-  { label: 'Braccio', value: 39.5, unit: 'cm', delta: +1.0 },
+/* Maps real BodyMeasurement fields (from the API) to their display labels */
+const MEASUREMENT_FIELDS: { key: string; label: string }[] = [
+  { key: 'chestCm', label: 'Petto' },
+  { key: 'waistCm', label: 'Vita' },
+  { key: 'hipsCm', label: 'Fianchi' },
+  { key: 'thighLeftCm', label: 'Coscia' },
+  { key: 'armLeftCm', label: 'Braccio' },
 ];
 
 export default function ProgressPage() {
@@ -115,6 +116,21 @@ export default function ProgressPage() {
   const last  = rawData[rawData.length - 1]?.peso;
   const deltaPeso = first != null && last != null ? +(last - first).toFixed(1) : null;
   const weeks = rawData.length > 1 ? rawData.length - 1 : null;
+
+  /* Real body-part measurements from the latest record (measurements is newest-first) */
+  const latestMeasurement = measurements && measurements.length > 0 ? measurements[0] : null;
+  const previousMeasurement = measurements && measurements.length > 1 ? measurements[1] : null;
+
+  const measurementTiles = latestMeasurement
+    ? MEASUREMENT_FIELDS
+        .filter(f => latestMeasurement[f.key] != null)
+        .map(f => {
+          const value = latestMeasurement[f.key];
+          const prevValue = previousMeasurement?.[f.key];
+          const delta = prevValue != null ? +(value - prevValue).toFixed(1) : null;
+          return { label: f.label, value, unit: 'cm', delta };
+        })
+    : [];
 
   const tooltipStyle: React.CSSProperties = {
     background: '#111118',
@@ -238,25 +254,41 @@ export default function ProgressPage() {
             </button>
           </div>
 
-          <div className="resp-tiles" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14 }}>
-            {measurementsFallback.map(m => (
-              <div key={m.label} style={INNER_SURFACE}>
-                <div style={{ ...LABEL_CAPS, marginBottom: 6 }}>{m.label}</div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-                  <span style={{ fontSize: 24, fontWeight: 800, color: '#e7e7ee', lineHeight: 1 }}>{m.value}</span>
-                  <span style={{ fontSize: 12, color: '#6b7280' }}>{m.unit}</span>
+          {measurementTiles.length > 0 ? (
+            <div className="resp-tiles" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 14 }}>
+              {measurementTiles.map(m => (
+                <div key={m.label} style={INNER_SURFACE}>
+                  <div style={{ ...LABEL_CAPS, marginBottom: 6 }}>{m.label}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+                    <span style={{ fontSize: 24, fontWeight: 800, color: '#e7e7ee', lineHeight: 1 }}>{m.value}</span>
+                    <span style={{ fontSize: 12, color: '#6b7280' }}>{m.unit}</span>
+                  </div>
+                  {m.delta !== null && (
+                    <div style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      marginTop: 6,
+                      color: m.delta >= 0 ? '#22c55e' : '#f87171',
+                    }}>
+                      {m.delta > 0 ? '+' : ''}{m.delta.toString().replace('.', ',')} cm
+                    </div>
+                  )}
                 </div>
-                <div style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  marginTop: 6,
-                  color: m.delta >= 0 ? '#22c55e' : '#f87171',
-                }}>
-                  {m.delta > 0 ? '+' : ''}{m.delta.toString().replace('.', ',')} cm
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '24px 0' }}>
+              <span style={{ fontSize: 13, color: '#6b7280', textAlign: 'center' }}>
+                Nessuna misurazione registrata — aggiungi la tua prima misurazione
+              </span>
+              <button
+                onClick={() => setModalOpen(true)}
+                style={{ fontSize: 12, color: '#a1a1b5', background: '#15151d', border: '1px solid #2a2a3a', borderRadius: 10, padding: '7px 14px', cursor: 'pointer' }}
+              >
+                + Aggiungi misurazione
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Analytics link */}

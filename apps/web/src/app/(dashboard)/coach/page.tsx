@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { coachApi } from '@/lib/api';
 import { Plus } from 'lucide-react';
+import { toast } from 'sonner';
 
 /* ─── Keyframes ─── */
 const KEYFRAMES = `
@@ -58,7 +59,27 @@ export default function CoachPage() {
       setIsTyping(false);
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
-    onError: () => setIsTyping(false),
+    onError: (_err: any, variables: any) => {
+      setIsTyping(false);
+      toast.error('Messaggio non inviato, riprova');
+      // Mark the failed user message so we can offer a retry affordance,
+      // and fall back to restoring the text into the input if we can't find it.
+      let marked = false;
+      setMessages(prev => {
+        const next = [...prev];
+        for (let i = next.length - 1; i >= 0; i--) {
+          if (next[i].role === 'USER' && next[i].content === variables?.message && !next[i].failed) {
+            next[i] = { ...next[i], failed: true };
+            marked = true;
+            break;
+          }
+        }
+        return next;
+      });
+      if (!marked && variables?.message) {
+        setMessage(variables.message);
+      }
+    },
   });
 
   useEffect(() => {
@@ -72,6 +93,20 @@ export default function CoachPage() {
     setMessage('');
     // Reset textarea height
     if (inputRef.current) inputRef.current.style.height = 'auto';
+    chatMutation.mutate({ message: content, conversationId });
+  };
+
+  const retryMessage = (content: string) => {
+    setMessages(prev => {
+      const next = [...prev];
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (next[i].role === 'USER' && next[i].content === content && next[i].failed) {
+          next[i] = { ...next[i], failed: false };
+          break;
+        }
+      }
+      return next;
+    });
     chatMutation.mutate({ message: content, conversationId });
   };
 
@@ -196,26 +231,43 @@ export default function CoachPage() {
                   }}>A</div>
                 )}
 
-                {/* Bubble */}
-                <div style={isUser ? {
-                  background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                  borderRadius: '16px 16px 4px 16px',
-                  padding: '13px 16px',
-                  fontSize: 14,
-                  lineHeight: 1.55,
-                  color: '#fff',
-                  maxWidth: '74%',
-                } : {
-                  background: '#15151d',
-                  border: '1px solid #1e1e2e',
-                  borderRadius: '16px 16px 16px 4px',
-                  padding: '13px 16px',
-                  fontSize: 14,
-                  lineHeight: 1.55,
-                  color: '#e7e7ee',
-                  maxWidth: '74%',
-                }}>
-                  {msg.content}
+                {/* Bubble (+ failed/retry affordance) */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start', gap: 5, maxWidth: '74%' }}>
+                  <div style={isUser ? {
+                    background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                    borderRadius: '16px 16px 4px 16px',
+                    padding: '13px 16px',
+                    fontSize: 14,
+                    lineHeight: 1.55,
+                    color: '#fff',
+                    opacity: msg.failed ? .6 : 1,
+                  } : {
+                    background: '#15151d',
+                    border: '1px solid #1e1e2e',
+                    borderRadius: '16px 16px 16px 4px',
+                    padding: '13px 16px',
+                    fontSize: 14,
+                    lineHeight: 1.55,
+                    color: '#e7e7ee',
+                  }}>
+                    {msg.content}
+                  </div>
+                  {isUser && msg.failed && (
+                    <button
+                      onClick={() => retryMessage(msg.content)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        color: '#f87171',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Non inviato — tocca per riprovare
+                    </button>
+                  )}
                 </div>
               </div>
             );

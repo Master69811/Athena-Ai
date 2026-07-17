@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { sessionsApi, workoutApi, recoveryApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { useWorkoutStore } from '@/store/workout.store';
@@ -43,6 +43,7 @@ const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${
 
 export default function SessionPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { activeSessionId, startSession, addSet: addSetToStore, endSession, nextExercise } = useWorkoutStore();
 
   const [sessionId, setSessionId] = useState<string | null>(activeSessionId);
@@ -55,7 +56,6 @@ export default function SessionPage() {
   const [restSeconds, setRestSeconds] = useState(0);
   const [aiRecommendation, setAiRecommendation] = useState<string | null>(null);
   const [completedSets, setCompletedSets] = useState<any[]>([]);
-  const [isWarmup, setIsWarmup] = useState(false);
   const [sessionStarted, setSessionStarted] = useState(false);
 
   const elapsed = useElapsed(sessionStarted);
@@ -104,6 +104,9 @@ export default function SessionPage() {
     mutationFn: ({ sessionId, data }: any) => sessionsApi.complete(sessionId, data),
     onSuccess: () => {
       endSession();
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['gamification-streaks'] });
       toast.success('Allenamento completato! Ottimo lavoro!');
       router.push('/workout/history');
     },
@@ -129,9 +132,27 @@ export default function SessionPage() {
   }, [currentExIdx, readiness?.hasData]);
 
   useEffect(() => {
-    if (!sessionId && activePlan) {
-      startMutation.mutate({ planId: activePlan.id, dayId: currentDay?.id });
-    }
+    if (sessionId || !activePlan) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const activeRes = await sessionsApi.getActive() as any;
+        const activeId = activeRes?.data?.id;
+        if (cancelled) return;
+        if (activeId) {
+          setSessionId(activeId);
+          startSession(activeId);
+          setSessionStarted(true);
+          return;
+        }
+      } catch {
+        // no active session found / lookup failed — fall through to start a new one
+      }
+      if (!cancelled) {
+        startMutation.mutate({ planId: activePlan.id, dayId: currentDay?.id });
+      }
+    })();
+    return () => { cancelled = true; };
   }, [activePlan]);
 
   // Rest countdown
@@ -162,24 +183,23 @@ export default function SessionPage() {
     } catch {}
   }, [completedSets, currentExercise, sessionId, adaptedSets, adaptedRpeTarget]);
 
-  const handleLogSet = () => {
+  const handleLogSet = (isWarmupSet: boolean) => {
     if (!sessionId || !currentExercise) return;
     logSetMutation.mutate({
       sessionId,
-      data: { exerciseId: currentExercise.exerciseId, setNumber: currentSet, weightKg: weight, reps, rpe, isWarmup },
+      data: { exerciseId: currentExercise.exerciseId, setNumber: currentSet, weightKg: weight, reps, rpe, isWarmup: isWarmupSet },
     });
     addSetToStore({
       exerciseId: currentExercise.exerciseId,
       exerciseName: currentExercise.exercise?.name || '',
-      setNumber: currentSet, weightKg: weight, reps, rpe, isWarmup,
+      setNumber: currentSet, weightKg: weight, reps, rpe, isWarmup: isWarmupSet,
     });
-    if (!isWarmup) {
+    if (!isWarmupSet) {
       setCurrentSet(s => s + 1);
       setIsResting(true);
       setRestSeconds(currentExercise.restSeconds || 90);
     }
-    setIsWarmup(false);
-    if (isWarmup) {
+    if (isWarmupSet) {
       toast.success(`Riscaldamento registrato: ${weight}kg × ${reps} rip`);
     } else {
       toast.success(`Serie ${currentSet} completata! ${weight}kg × ${reps} rip @ RPE ${rpe}`);
@@ -247,7 +267,11 @@ export default function SessionPage() {
           </p>
         </div>
         <button
-          onClick={() => router.push('/workout')}
+          onClick={() => {
+            if (window.confirm('Vuoi terminare l\'allenamento? I progressi non salvati andranno persi.')) {
+              router.push('/workout');
+            }
+          }}
           aria-label="Esci dall'allenamento"
           style={{
             width: 40, height: 40, background: '#1a1a24', border: '1px solid #2a2a3a',
@@ -491,7 +515,7 @@ export default function SessionPage() {
                 )}
                 <button
                   className="ctrl-btn"
-                  onClick={handleLogSet}
+                  onClick={() => handleLogSet(false)}
                   disabled={logSetMutation.isPending}
                   style={{
                     background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
@@ -509,7 +533,7 @@ export default function SessionPage() {
 
               {/* Warmup shortcut */}
               <button
-                onClick={() => { setIsWarmup(true); handleLogSet(); }}
+                onClick={() => handleLogSet(true)}
                 style={{
                   background: 'none', border: 'none', padding: 0,
                   color: '#6b7280', fontSize: 12, cursor: 'pointer',

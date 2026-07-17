@@ -36,6 +36,7 @@ export function Sidebar() {
   });
 
   const handleLogout = async () => {
+    if (!window.confirm("Vuoi uscire dall'account?")) return;
     await authApi.logout().catch(() => {});
     logout();
     router.push('/login');

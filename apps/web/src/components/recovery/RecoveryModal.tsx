@@ -50,6 +50,7 @@ export function RecoveryModal({ open, onClose }: RecoveryModalProps) {
     mutationFn: (data: any) => recoveryApi.log(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recovery-latest'] });
+      queryClient.invalidateQueries({ queryKey: ['recovery-history', 7] });
       queryClient.invalidateQueries({ queryKey: ['recovery-snapshot'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Recupero registrato! Athena aggiornerà i tuoi consigli.');

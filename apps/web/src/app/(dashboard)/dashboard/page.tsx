@@ -88,23 +88,6 @@ function DonutRing({ pct, size = 190, sw = 15, color = '#6366f1' }: { pct: numbe
   );
 }
 
-function Sparkline({ vals, color }: { vals: number[]; color: string }) {
-  const w = 84, h = 24, pad = 2;
-  const min = Math.min(...vals), max = Math.max(...vals), rng = (max - min) || 1;
-  const pts = vals.map((v, i) => [
-    pad + i * (w - pad * 2) / (vals.length - 1),
-    pad + (1 - (v - min) / rng) * (h - pad * 2),
-  ]);
-  const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
-  const last = pts[pts.length - 1];
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-      <path d={d} fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={last[0]} cy={last[1]} r={2.2} fill={color} />
-    </svg>
-  );
-}
-
 function EcgWave() {
   const w = 420, h = 58, mid = h / 2;
   let d = `M0 ${mid}`;
@@ -137,22 +120,6 @@ function MacroBar({ pct, gradient }: { pct: number; gradient: string }) {
         background: gradient, transformOrigin: 'left',
         animation: 'barGrow .9s cubic-bezier(.4,0,.2,1)',
       }} />
-    </div>
-  );
-}
-
-function MiniBarChart({ vals }: { vals: number[] }) {
-  const max = Math.max(...vals);
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 32 }}>
-      {vals.map((v, i) => (
-        <div key={i} style={{
-          flex: 1, borderRadius: 4,
-          background: i === vals.length - 1 ? 'linear-gradient(90deg,#22c55e,#4ade80)' : '#1a1a24',
-          height: `${Math.round((v / max) * 100)}%`,
-          boxShadow: i === vals.length - 1 ? '0 0 8px rgba(34,197,94,.4)' : undefined,
-        }} />
-      ))}
     </div>
   );
 }
@@ -245,6 +212,12 @@ export default function DashboardPage() {
     select: (res: any) => res.data,
   });
 
+  const { data: nutritionPlan } = useQuery({
+    queryKey: ['nutrition-plan'],
+    queryFn: nutritionApi.getPlan,
+    select: (res: any) => res.data,
+  });
+
   const { data: latestInsights } = useQuery({
     queryKey: ['progression-insights-dashboard'],
     queryFn: async () => {
@@ -281,7 +254,8 @@ export default function DashboardPage() {
     onError: () => toast.error('Errore nell\'applicare la decisione'),
   });
 
-  const recoveryScore = recovery?.score ?? 92;
+  const hasRecoveryData = recovery?.score != null;
+  const recoveryScore = recovery?.score ?? 0;
   const recoveryDisplay = useCountUp(recoveryScore);
 
   const greeting = (() => {
@@ -304,51 +278,48 @@ export default function DashboardPage() {
 
   const cal = todayNutrition?.totals;
   const kcalConsumed = (cal?.protein?.consumed ?? 0) * 4 + (cal?.carbs?.consumed ?? 0) * 4 + (cal?.fat?.consumed ?? 0) * 9;
-  const kcalTarget = 2450;
-  const kcalPct = kcalConsumed / kcalTarget;
+  const kcalTarget = nutritionPlan?.dailyCalories ?? null;
+  const hasMacroTargets = cal != null || nutritionPlan != null;
 
-  const protPct = cal ? (cal.protein?.consumed ?? 0) / Math.max(1, cal.protein?.target ?? 220) : 1;
-  const carbPct = cal ? (cal.carbs?.consumed ?? 0) / Math.max(1, cal.carbs?.target ?? 300) : 0.83;
-  const fatPct  = cal ? (cal.fat?.consumed ?? 0) / Math.max(1, cal.fat?.target ?? 100) : 0.9;
+  const protTarget = cal?.protein?.target ?? nutritionPlan?.proteinG ?? 0;
+  const carbTarget = cal?.carbs?.target ?? nutritionPlan?.carbsG ?? 0;
+  const fatTarget = cal?.fat?.target ?? nutritionPlan?.fatG ?? 0;
 
-  const protLabel = cal ? `${cal.protein?.consumed ?? 0} / ${cal.protein?.target ?? 220} g` : '220 / 220 g';
-  const carbLabel = cal ? `${cal.carbs?.consumed ?? 0} / ${cal.carbs?.target ?? 300} g` : '250 / 300 g';
-  const fatLabel  = cal ? `${cal.fat?.consumed ?? 0} / ${cal.fat?.target ?? 100} g` : '90 / 100 g';
+  const protPct = protTarget ? (cal?.protein?.consumed ?? 0) / protTarget : 0;
+  const carbPct = carbTarget ? (cal?.carbs?.consumed ?? 0) / carbTarget : 0;
+  const fatPct  = fatTarget ? (cal?.fat?.consumed ?? 0) / fatTarget : 0;
 
-  const nextWorkout = activePlan?.currentWorkout || activePlan?.nextWorkout;
-  const exercises = nextWorkout?.exercises?.slice(0, 4) || [
-    { name: 'Bench Press', sets: 4, reps: '6-8', rpe: 8.5 },
-    { name: 'Overhead Press', sets: 3, reps: '8-10', rpe: 8 },
-    { name: 'Cable Fly', sets: 3, reps: '12' },
-    { name: 'Tricep Pushdown', sets: 3, reps: '15' },
-  ];
+  const protLabel = hasMacroTargets ? `${cal?.protein?.consumed ?? 0} / ${protTarget || '—'} g` : '—';
+  const carbLabel = hasMacroTargets ? `${cal?.carbs?.consumed ?? 0} / ${carbTarget || '—'} g` : '—';
+  const fatLabel  = hasMacroTargets ? `${cal?.fat?.consumed ?? 0} / ${fatTarget || '—'} g` : '—';
 
-  const weekSessions = dashboard?.weeklyStats?.sessions ?? 4;
-  const weekVolume = dashboard?.weeklyStats?.totalVolume
-    ? (dashboard.weeklyStats.totalVolume / 1000).toFixed(1)
-    : '42.6';
+  // The plan endpoint only returns `days` (no server-computed "next workout"),
+  // so derive today's session the same way apps/web/.../workout/page.tsx does.
+  const todayDayIndex = new Date().getDay();
+  const nextWorkoutDay = activePlan?.days?.find((d: any) => d.dayIndex === todayDayIndex) ?? activePlan?.days?.[0];
+  const exercises = nextWorkoutDay?.exercises?.slice(0, 4) ?? [];
 
-  const decisions = (() => {
+  const weekSessions = dashboard?.workoutsThisWeek ?? 0;
+  const weekVolume = dashboard?.totalVolumeThisWeek
+    ? (dashboard.totalVolumeThisWeek / 1000).toFixed(1)
+    : null;
+
+  const decisions = (nutritionDecisions ?? []).slice(0, 3).map((d, i) => {
     const icons = [
-      { path: 'M3 17l6-6 4 4 8-8 M21 7h-5 M21 7v5' },
-      { path: 'M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z' },
-      { path: 'M6.5 6.5v11 M17.5 6.5v11 M6.5 12h11' },
+      'M3 17l6-6 4 4 8-8 M21 7h-5 M21 7v5',
+      'M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z',
+      'M6.5 6.5v11 M17.5 6.5v11 M6.5 12h11',
     ];
-    if (nutritionDecisions?.length) {
-      return nutritionDecisions.slice(0, 3).map((d, i) => ({
-        icon: icons[i % icons.length].path,
-        title: d.type === 'CALORIE_INCREASE' ? `Calorie · +${d.deltaCalories} kcal`
-          : d.type === 'CALORIE_DECREASE' ? `Calorie · ${d.deltaCalories} kcal`
-          : 'Nutrizione · Mantenimento',
-        body: d.rationale,
-      }));
-    }
-    return [
-      { icon: icons[0].path, title: 'Calorie · +150 kcal (focus carbo)', body: 'Peso stabile da 9 giorni con volume in crescita: aumento i carboidrati per supportare il surplus.' },
-      { icon: icons[1].path, title: 'Recovery · qualità del sonno profondo', body: 'HRV ottimo ma sonno profondo sotto la media: stasera anticipa la routine di 30 minuti.' },
-      { icon: icons[2].path, title: 'Panca · +2,5 kg al top set', body: 'Ultime 3 sessioni chiuse a RPE ≤8. Spingiamo il carico oggi sulla prima serie.' },
-    ];
-  })();
+    return {
+      icon: icons[i % icons.length],
+      title: d.type === 'CALORIE_INCREASE' ? `Calorie · +${d.deltaCalories} kcal`
+        : d.type === 'CALORIE_DECREASE' ? `Calorie · ${d.deltaCalories} kcal`
+        : 'Nutrizione · Mantenimento',
+      body: d.rationale,
+    };
+  });
+
+  const weightChartData = (dashboard?.weightTrend ?? []).map((p: { date: string; weight: number }, i: number) => ({ x: i, v: p.weight }));
 
   if (dashboardLoading) return <DashboardSkeleton />;
 
@@ -369,30 +340,24 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Vital pills */}
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {[
-            { label: 'HRV', value: dashboard?.healthMetrics?.hrv ?? 68, unit: ' ms', color: '#8b5cf6', vals: [54,58,57,62,60,65,68] },
-            { label: 'Sonno', value: dashboard?.healthMetrics?.sleepHours?.toFixed(1) ?? '8.2', unit: ' h', color: '#6366f1', vals: [6.8,7.2,7.0,7.9,8.0,7.6,8.2] },
-            { label: 'FC riposo', value: dashboard?.healthMetrics?.restingHR ?? 52, unit: ' bpm', color: '#22c55e', vals: [56,55,54,53,54,53,52] },
-            { label: 'Passi', value: dashboard?.healthMetrics?.steps ? (dashboard.healthMetrics.steps / 1000).toFixed(1) : '9.4', unit: 'k', color: '#22c55e', vals: [7.1,8.4,6.9,9.1,8.8,9.0,9.4] },
-          ].map(v => (
-            <div key={v.label}
+        {/* Recovery score pill — the only "vital" the backend actually provides */}
+        {hasRecoveryData && (
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div
               className="vital-pill"
               style={{
                 background: '#111118', border: '1px solid #1e1e2e', borderRadius: 16,
                 padding: '14px 16px', minWidth: 112, transition: 'transform .2s, border-color .2s', cursor: 'default',
               }}
             >
-              <div style={{ fontSize: 10.5, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.1em' }}>{v.label}</div>
+              <div style={{ fontSize: 10.5, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.1em' }}>Recovery</div>
               <div style={{ margin: '7px 0 9px', letterSpacing: '-.5px' }}>
-                <span style={{ fontSize: 23, fontWeight: 800, color: '#e7e7ee' }}>{v.value}</span>
-                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{v.unit}</span>
+                <span style={{ fontSize: 23, fontWeight: 800, color: '#e7e7ee' }}>{recoveryScore}</span>
+                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}> / 100</span>
               </div>
-              <Sparkline vals={v.vals} color={v.color} />
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* ── Two-column grid ── */}
@@ -455,7 +420,7 @@ export default function DashboardPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <div className="label-caps">Macro di oggi</div>
               <div style={{ fontSize: 12, color: '#a1a1b5' }}>
-                <b style={{ color: '#e7e7ee' }}>{Math.round(kcalConsumed) || 1840}</b> / {kcalTarget} kcal
+                <b style={{ color: '#e7e7ee' }}>{Math.round(kcalConsumed)}</b> / {kcalTarget ?? '—'} kcal
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -486,28 +451,34 @@ export default function DashboardPage() {
               }}>A</div>
               <div className="label-caps">Decisioni di Athena</div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-              {decisions.map((d, i) => (
-                <div key={i} style={{
-                  display: 'flex', gap: 13, padding: 14, borderRadius: 13,
-                  background: '#15151d', border: '1px solid #1e1e2e',
-                }}>
-                  <div style={{
-                    width: 34, height: 34, flexShrink: 0, borderRadius: 9,
-                    background: 'rgba(99,102,241,.14)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+            {decisions.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+                {decisions.map((d, i) => (
+                  <div key={i} style={{
+                    display: 'flex', gap: 13, padding: 14, borderRadius: 13,
+                    background: '#15151d', border: '1px solid #1e1e2e',
                   }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      {d.icon.split(' M').map((seg, j) => <path key={j} d={j === 0 ? seg : 'M' + seg} />)}
-                    </svg>
+                    <div style={{
+                      width: 34, height: 34, flexShrink: 0, borderRadius: 9,
+                      background: 'rgba(99,102,241,.14)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        {d.icon.split(' M').map((seg, j) => <path key={j} d={j === 0 ? seg : 'M' + seg} />)}
+                      </svg>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2, color: '#e7e7ee' }}>{d.title}</div>
+                      <div style={{ fontSize: 12.5, color: '#a1a1b5', lineHeight: 1.5 }}>{d.body}</div>
+                    </div>
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2, color: '#e7e7ee' }}>{d.title}</div>
-                    <div style={{ fontSize: 12.5, color: '#a1a1b5', lineHeight: 1.5 }}>{d.body}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: '#6b7280', padding: '8px 2px' }}>
+                Nessuna decisione disponibile al momento.
+              </div>
+            )}
           </div>
         </div>
 
@@ -523,29 +494,33 @@ export default function DashboardPage() {
             <div style={{ position: 'absolute', top: -40, right: -40, width: 160, height: 160, background: 'radial-gradient(circle,rgba(99,102,241,.22),transparent 70%)', pointerEvents: 'none' }} />
             <div className="label-caps" style={{ marginBottom: 14 }}>Prossimo allenamento</div>
             <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-.5px', marginBottom: 4, color: '#e7e7ee' }}>
-              {nextWorkout?.name || 'Push · Forza'}
+              {nextWorkoutDay?.name || 'Nessun allenamento programmato'}
             </div>
             <div style={{ fontSize: 13, color: '#a1a1b5', marginBottom: 16 }}>
-              {nextWorkout?.weekNumber ? `Settimana ${nextWorkout.weekNumber} · ` : 'Settimana 6 · '}
-              {nextWorkout?.estimatedDuration ? `~${nextWorkout.estimatedDuration} min · ` : '~62 min · '}
-              {nextWorkout?.muscleGroups?.join(', ') || 'Petto, Spalle, Tricipiti'}
+              {nextWorkoutDay?.muscleGroups?.join(', ') || (activePlan ? 'Giorno di riposo' : 'Nessun piano attivo')}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 20 }}>
-              {exercises.map((e: any, i: number) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '11px 14px', background: 'rgba(255,255,255,.025)',
-                  border: '1px solid #1e1e2e', borderRadius: 11,
-                }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 600, color: '#e7e7ee' }}>
-                    {e.name || e.exercise?.name}
-                  </span>
-                  <span style={{ fontSize: 12.5, color: '#a1a1b5' }}>
-                    {e.sets}×{e.reps || e.repsRange}{e.rpe ? ` · RPE ${e.rpe}` : ''}
-                  </span>
-                </div>
-              ))}
-            </div>
+            {exercises.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 20 }}>
+                {exercises.map((e: any, i: number) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '11px 14px', background: 'rgba(255,255,255,.025)',
+                    border: '1px solid #1e1e2e', borderRadius: 11,
+                  }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: '#e7e7ee' }}>
+                      {e.exercise?.nameIt || e.exercise?.name}
+                    </span>
+                    <span style={{ fontSize: 12.5, color: '#a1a1b5' }}>
+                      {e.sets}×{e.repsMin === e.repsMax ? e.repsMin : `${e.repsMin}-${e.repsMax}`}{e.rpeTarget ? ` · RPE ${e.rpeTarget}` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 20 }}>
+                {activePlan ? 'Riposo oggi — nessun esercizio programmato.' : 'Crea un piano di allenamento per iniziare.'}
+              </div>
+            )}
             <button
               onClick={() => router.push('/workout/session')}
               style={{
@@ -566,10 +541,8 @@ export default function DashboardPage() {
             <div className="card-athena" style={{ padding: 20 }}>
               <div className="label-caps" style={{ marginBottom: 10 }}>Volume settimana</div>
               <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: -1, color: '#e7e7ee' }}>
-                {weekVolume}<span style={{ fontSize: 15, color: '#6b7280', fontWeight: 600 }}> t</span>
+                {weekVolume ?? '—'}<span style={{ fontSize: 15, color: '#6b7280', fontWeight: 600 }}> t</span>
               </div>
-              <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 600, margin: '4px 0 12px' }}>↑ 8% vs scorsa</div>
-              <MiniBarChart vals={[36.2, 38.5, 39.4, 41.8, 42.6]} />
             </div>
             <div className="card-athena" style={{ padding: 20 }}>
               <div className="label-caps" style={{ marginBottom: 10 }}>Sessioni</div>
@@ -599,22 +572,28 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-            <ResponsiveContainer width="100%" height={120}>
-              <AreaChart data={[82.8,82.4,82.1,81.6,81.3,80.9,80.6,80.4].map((v, i) => ({ x: i, v }))}>
-                <defs>
-                  <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <Area type="monotone" dataKey="v" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#weightGrad)" dot={false} />
-                <Tooltip
-                  contentStyle={{ background: '#15151d', border: '1px solid #1e1e2e', borderRadius: 10, fontSize: 12 }}
-                  formatter={(v: any) => [`${v} kg`, 'Peso']}
-                  labelFormatter={() => ''}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {weightChartData.length > 1 ? (
+              <ResponsiveContainer width="100%" height={120}>
+                <AreaChart data={weightChartData}>
+                  <defs>
+                    <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="v" stroke="#8b5cf6" strokeWidth={2.5} fill="url(#weightGrad)" dot={false} />
+                  <Tooltip
+                    contentStyle={{ background: '#15151d', border: '1px solid #1e1e2e', borderRadius: 10, fontSize: 12 }}
+                    formatter={(v: any) => [`${v} kg`, 'Peso']}
+                    labelFormatter={() => ''}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#6b7280' }}>
+                Registra il tuo peso per vedere il trend.
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth.store';
-import { gamificationApi } from '@/lib/api';
+import { authApi, gamificationApi } from '@/lib/api';
+import { NavIcon } from './nav-items';
 
 const PAGE_META: Record<string, [string, string]> = {
   '/dashboard':          ['Dashboard', 'La tua giornata in un colpo d\'occhio'],
@@ -94,6 +96,125 @@ function StreakBadge({ enabled }: { enabled: boolean }) {
   );
 }
 
+/**
+ * Account menu anchored to the avatar button. This is the only way to reach
+ * Progress / Achievement / Impostazioni / logout on small screens, since the
+ * full sidebar is desktop-only (`hidden lg:flex`) — so it must stay usable
+ * at every viewport size, not just `lg:`.
+ */
+function AccountMenu({ name, initials }: { name: string; initials: string }) {
+  const router = useRouter();
+  const { logout } = useAuthStore();
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const onClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onClick);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onClick);
+    };
+  }, [open]);
+
+  const handleLogout = async () => {
+    setOpen(false);
+    if (!window.confirm("Vuoi uscire dall'account?")) return;
+    await authApi.logout().catch(() => {});
+    logout();
+    router.push('/login');
+  };
+
+  const menuItems: Array<{ href: string; label: string; icon: Parameters<typeof NavIcon>[0]['name'] }> = [
+    { href: '/progress', label: 'Progress', icon: 'progress' },
+    { href: '/achievements', label: 'Achievement', icon: 'achievements' },
+    { href: '/settings', label: 'Impostazioni', icon: 'settings' },
+  ];
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Account di ${name}`}
+        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+        style={{
+          width: 38, height: 38, borderRadius: 11, border: 'none',
+          background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontWeight: 700, fontSize: 15, color: '#fff', flexShrink: 0,
+          cursor: 'pointer',
+        }}
+      >
+        {initials}
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          aria-label={`Account di ${name}`}
+          style={{
+            position: 'absolute', top: 'calc(100% + 10px)', right: 0,
+            minWidth: 200, zIndex: 50,
+            background: '#111118', border: '1px solid #1e1e2e',
+            borderRadius: 14, padding: 6,
+            boxShadow: '0 12px 32px rgba(0,0,0,.45)',
+          }}
+        >
+          <div style={{ padding: '8px 10px 6px', fontSize: 12.5, fontWeight: 600, color: '#e7e7ee', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {name}
+          </div>
+          {menuItems.map(({ href, label, icon }) => (
+            <Link
+              key={href}
+              href={href}
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 10px', borderRadius: 9,
+                fontSize: 13.5, fontWeight: 600, color: '#c7c7d4',
+                textDecoration: 'none',
+              }}
+              className="sidebar-item"
+            >
+              <NavIcon name={icon} size={17} />
+              {label}
+            </Link>
+          ))}
+          <div style={{ height: 1, background: '#1e1e2e', margin: '6px 4px' }} />
+          <button
+            type="button"
+            role="menuitem"
+            onClick={handleLogout}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+              padding: '9px 10px', borderRadius: 9, border: 'none', background: 'transparent',
+              fontSize: 13.5, fontWeight: 600, color: '#f87171', cursor: 'pointer', textAlign: 'left',
+            }}
+            className="sidebar-item"
+          >
+            Esci
+          </button>
+        </div>
+      )}
+
+      <style>{`
+        .sidebar-item:hover { background: #1a1a24 !important; }
+      `}</style>
+    </div>
+  );
+}
+
 export function Topbar() {
   const pathname = usePathname();
   const { user } = useAuthStore();
@@ -144,18 +265,8 @@ export function Topbar() {
 
         <StreakBadge enabled={!!user} />
 
-        {/* Avatar */}
-        <div
-          aria-label={`Account di ${name}`}
-          style={{
-            width: 38, height: 38, borderRadius: 11,
-            background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 700, fontSize: 15, color: '#fff', flexShrink: 0,
-          }}
-        >
-          {initials}
-        </div>
+        {/* Avatar + account menu (only mobile path to Progress/Achievement/Impostazioni/logout) */}
+        <AccountMenu name={name} initials={initials} />
       </div>
     </header>
   );
