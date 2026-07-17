@@ -2,14 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { gamificationApi } from '@/lib/api';
-
-/* ─── Keyframes ─── */
-const KEYFRAMES = `
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(16px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-`;
+import { AlertTriangle, Trophy, Medal } from 'lucide-react';
 
 /* ─── Rarity config ─── */
 type Rarity = 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
@@ -35,14 +28,6 @@ const RARITY_LABEL: Record<Rarity, string> = {
   LEGENDARY: 'LEGGENDARIO',
 };
 
-const LABEL_CAPS: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  letterSpacing: '.14em',
-  color: '#6b7280',
-  textTransform: 'uppercase',
-};
-
 export default function AchievementsPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['achievements'],
@@ -61,16 +46,10 @@ export default function AchievementsPage() {
 
   return (
     <>
-      <style>{KEYFRAMES}</style>
-
-      <div style={{ maxWidth: 1180, animation: 'fadeUp .4s ease' }}>
+      <div className="animate-fade-up" style={{ maxWidth: 1180 }}>
 
         {/* ── Points banner ── */}
-        <div style={{
-          background: 'linear-gradient(135deg,#15131f,#111118)',
-          border: '1px solid rgba(139,92,246,.25)',
-          borderRadius: 20,
-          padding: 24,
+        <div className="card border-primary/25" style={{
           marginBottom: 22,
           display: 'flex',
           alignItems: 'center',
@@ -78,31 +57,29 @@ export default function AchievementsPage() {
         }}>
           {/* Score */}
           <div>
-            <div style={{
+            <div className="tabular-nums" style={{
               fontSize: 42,
-              fontWeight: 800,
-              background: 'linear-gradient(135deg,#a5b4fc,#c4b5fd)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              fontWeight: 700,
+              color: 'hsl(var(--foreground))',
               lineHeight: 1,
               marginBottom: 4,
             }}>
               {displayPoints.toLocaleString('it-IT')}
             </div>
-            <div style={{ fontSize: 12, color: '#6b7280' }}>punti totali</div>
+            <div className="text-caption text-content-tertiary">punti totali</div>
           </div>
 
           {/* Progress */}
           <div style={{ flex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: '#e7e7ee' }}>Progresso globale</span>
-              <span style={{ fontSize: 12, color: '#a1a1b5' }}>{earnedCount} / {totalCount} badge</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>Progresso globale</span>
+              <span className="text-caption text-content-secondary">{earnedCount} / {totalCount} badge</span>
             </div>
-            <div style={{ height: 10, background: '#1a1a24', borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{ height: 10, background: 'hsl(var(--surface-3))', borderRadius: 6, overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
                 width: `${progressPct}%`,
-                background: 'linear-gradient(90deg,#6366f1,#8b5cf6)',
+                background: 'hsl(var(--primary))',
                 borderRadius: 6,
                 transition: 'width .7s ease',
               }} />
@@ -112,37 +89,26 @@ export default function AchievementsPage() {
 
         {/* ── Badge grid ── */}
         {isError ? (
-          <div style={{
-            background: '#111118',
-            border: '1px solid #1e1e2e',
-            borderRadius: 20,
-            padding: 48,
-            textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 40, marginBottom: 14 }}>⚠️</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#e7e7ee', marginBottom: 8 }}>Impossibile caricare i traguardi, riprova</div>
+          <div className="card" style={{ padding: 48, textAlign: 'center' }}>
+            <div className="w-16 h-16 rounded-2xl bg-surface-3 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle size={32} className="text-warning" />
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))', marginBottom: 8 }}>Impossibile caricare i traguardi, riprova</div>
             <button
               onClick={() => refetch()}
-              style={{
-                marginTop: 12, padding: '9px 18px', border: 'none', borderRadius: 11,
-                background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              }}
+              className="btn-secondary rounded-xl"
+              style={{ marginTop: 12, padding: '9px 18px', fontSize: 13 }}
             >
               Riprova
             </button>
           </div>
         ) : achievements.length === 0 && !isLoading ? (
-          <div style={{
-            background: '#111118',
-            border: '1px solid #1e1e2e',
-            borderRadius: 20,
-            padding: 48,
-            textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 40, marginBottom: 14 }}>🏆</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#e7e7ee', marginBottom: 8 }}>Nessun achievement ancora</div>
-            <div style={{ fontSize: 13, color: '#6b7280', maxWidth: 280, margin: '0 auto' }}>
+          <div className="card" style={{ padding: 48, textAlign: 'center' }}>
+            <div className="w-16 h-16 rounded-2xl bg-surface-3 flex items-center justify-center mx-auto mb-4">
+              <Trophy size={32} className="text-content-tertiary" />
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))', marginBottom: 8 }}>Nessun achievement ancora</div>
+            <div className="text-caption text-content-tertiary" style={{ maxWidth: 280, margin: '0 auto' }}>
               Completa allenamenti e raggiungi i tuoi obiettivi per sbloccare i primi traguardi.
             </div>
           </div>
@@ -157,23 +123,22 @@ export default function AchievementsPage() {
               const color = RARITY_COLOR[rarity] ?? RARITY_COLOR.COMMON;
               const bg    = RARITY_BG[rarity]    ?? RARITY_BG.COMMON;
               const label = RARITY_LABEL[rarity] ?? rarity;
-              const icon  = a.icon ?? '🏅';
+              const icon  = a.icon ?? null;
               const name  = a.nameIt ?? a.name ?? '';
               const desc  = a.descriptionIt ?? a.description ?? '';
 
               return (
                 <div
                   key={a.id ?? idx}
+                  className="animate-fade-up"
                   style={{
-                    background: '#111118',
-                    border: `1px solid ${color}55`,
-                    borderRadius: 18,
+                    background: 'hsl(var(--surface))',
+                    border: `1px solid ${a.earned ? color + '40' : 'hsl(var(--border))'}`,
+                    borderRadius: 16,
                     padding: 20,
-                    boxShadow: a.earned ? `0 0 24px ${bg}` : 'none',
-                    opacity: a.earned ? 1 : 0.5,
+                    opacity: a.earned ? 1 : 0.45,
                     filter: a.earned ? 'none' : 'grayscale(0.6)',
-                    animation: 'fadeUp .4s ease',
-                    animationDelay: `${Math.min(idx * 0.05, 0.4)}s`,
+                    animationDelay: `${Math.min(idx * 0.03, 0.3)}s`,
                     animationFillMode: 'both',
                     display: 'flex',
                     flexDirection: 'column',
@@ -188,13 +153,13 @@ export default function AchievementsPage() {
                     fontSize: 24,
                     filter: a.earned ? 'none' : 'grayscale(1)',
                   }}>
-                    {icon}
+                    {icon ? icon : <Medal size={24} color={color} />}
                   </div>
 
                   {/* Name + desc */}
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#e7e7ee', marginBottom: 3 }}>{name}</div>
-                    <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>{desc}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'hsl(var(--foreground))', marginBottom: 3 }}>{name}</div>
+                    <div className="text-caption text-content-tertiary" style={{ lineHeight: 1.4 }}>{desc}</div>
                   </div>
 
                   {/* Rarity tag + points */}
@@ -211,7 +176,7 @@ export default function AchievementsPage() {
                     }}>
                       {label}
                     </span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: '#6366f1' }}>
+                    <span className="tabular-nums" style={{ fontSize: 11, fontWeight: 600, color: 'hsl(var(--primary))' }}>
                       +{a.points ?? 0} pt
                     </span>
                   </div>

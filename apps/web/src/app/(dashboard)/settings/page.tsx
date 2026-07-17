@@ -7,21 +7,14 @@ import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/auth.store';
 import { usersApi } from '@/lib/api';
 import { toast } from 'sonner';
-
-/* ─── keyframes ─────────────────────────────────────────── */
-const STYLES = `
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-`;
+import { Check } from 'lucide-react';
 
 /* ─── tiny helpers ──────────────────────────────────────── */
 function CapLabel({ children }: { children: React.ReactNode }) {
   return (
     <p style={{
       fontSize: 11, fontWeight: 700, letterSpacing: '.14em',
-      color: '#6b7280', textTransform: 'uppercase', margin: '0 0 18px',
+      color: 'hsl(var(--content-tertiary))', textTransform: 'uppercase', margin: '0 0 18px',
     }}>
       {children}
     </p>
@@ -35,15 +28,12 @@ interface FieldProps {
 function ProfileField({ label, value }: FieldProps) {
   return (
     <div>
-      <p style={{ fontSize: 12, color: '#6b7280', margin: '0 0 6px' }}>{label}</p>
-      <div style={{
-        background: '#15151d',
-        border: '1px solid #1e1e2e',
-        borderRadius: 11,
+      <p style={{ fontSize: 12, color: 'hsl(var(--content-tertiary))', margin: '0 0 6px' }}>{label}</p>
+      <div className="card-inner" style={{
         padding: '12px 14px',
         fontSize: 14,
         fontWeight: 600,
-        color: value !== undefined && value !== null && value !== '' ? '#e7e7ee' : '#6b7280',
+        color: value !== undefined && value !== null && value !== '' ? 'hsl(var(--foreground))' : 'hsl(var(--content-tertiary))',
       }}>
         {value !== undefined && value !== null && value !== '' ? String(value) : '—'}
       </div>
@@ -63,16 +53,13 @@ function PrefRow({ label, value, border = true }: PrefRowProps) {
       alignItems: 'center',
       justifyContent: 'space-between',
       padding: '14px 0',
-      borderBottom: border ? '1px solid #1a1a24' : 'none',
+      borderBottom: border ? '1px solid hsl(var(--surface-3))' : 'none',
     }}>
-      <span style={{ fontSize: 14, fontWeight: 500, color: '#e7e7ee' }}>{label}</span>
-      <div style={{
-        background: '#15151d',
-        border: '1px solid #1e1e2e',
-        borderRadius: 9,
+      <span style={{ fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))' }}>{label}</span>
+      <div className="card-inner rounded-lg" style={{
         padding: '7px 13px',
         fontSize: 13,
-        color: '#a1a1b5',
+        color: 'hsl(var(--content-secondary))',
       }}>
         {value}
       </div>
@@ -150,25 +137,18 @@ export default function SettingsPage() {
 
   return (
     <>
-      <style>{STYLES}</style>
-
-      <div style={{ maxWidth: 820, display: 'flex', flexDirection: 'column', gap: 20, animation: 'fadeUp .4s ease' }}>
+      <div className="animate-fade-up" style={{ maxWidth: 820, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
         {/* ── Profilo ── */}
-        <div style={{
-          background: '#111118',
-          border: '1px solid #1e1e2e',
-          borderRadius: 20,
-          padding: 24,
-        }}>
+        <div className="card">
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
             <CapLabel>Profilo</CapLabel>
             <button
               onClick={() => setOpen(true)}
+              className="btn-secondary"
               style={{
-                padding: '9px 15px', border: 'none', borderRadius: 11,
-                background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                padding: '9px 15px', borderRadius: 11,
+                fontSize: 13, cursor: 'pointer',
                 marginTop: -4,
               }}
             >
@@ -183,12 +163,7 @@ export default function SettingsPage() {
             <ProfileField label="Altezza"          value={profile?.heightCm ? `${profile.heightCm} cm` : undefined} />
             <ProfileField label="Grasso corporeo"  value={profile?.bodyFatPercentage ? `${profile.bodyFatPercentage}%` : undefined} />
           </div>
-          {profile?.bio && (
-            <div style={{ marginTop: 16 }}>
-              <ProfileField label="Obiettivo" value={goalLabel(profile?.goalType)} />
-            </div>
-          )}
-          {!profile?.bio && profile?.goalType && (
+          {profile?.goalType && (
             <div style={{ marginTop: 16 }}>
               <ProfileField label="Obiettivo" value={goalLabel(profile?.goalType)} />
             </div>
@@ -196,20 +171,12 @@ export default function SettingsPage() {
         </div>
 
         {/* ── Abbonamento ── */}
-        <div style={{
-          background: '#111118',
-          border: '1px solid #1e1e2e',
-          borderRadius: 20,
-          padding: 24,
-        }}>
+        <div className="card">
           <CapLabel>Abbonamento</CapLabel>
           <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
             {/* FREE tile */}
-            <div style={{
-              background: '#15151d',
-              border: `1px solid ${isPro ? '#1e1e2e' : 'rgba(99,102,241,.4)'}`,
-              borderRadius: 16,
+            <div className={isPro ? 'card-inner' : 'card-inner border-primary/40'} style={{
               padding: 20,
               position: 'relative',
               opacity: isPro ? .55 : 1,
@@ -218,23 +185,23 @@ export default function SettingsPage() {
                 <div style={{
                   position: 'absolute', top: 12, right: 12,
                   fontSize: 9, fontWeight: 700, letterSpacing: '.12em',
-                  color: '#6366f1', border: '1px solid rgba(99,102,241,.4)',
+                  color: 'hsl(var(--primary))', border: '1px solid rgba(99,102,241,.4)',
                   borderRadius: 5, padding: '2px 7px', textTransform: 'uppercase',
                 }}>
                   ATTIVO
                 </div>
               )}
-              <p style={{ fontSize: 13, fontWeight: 700, color: '#a1a1b5', margin: '0 0 6px' }}>FREE</p>
-              <p style={{ fontSize: 28, fontWeight: 800, color: '#e7e7ee', margin: '0 0 14px' }}>€0<span style={{ fontSize: 13, fontWeight: 500, color: '#6b7280' }}>/mese</span></p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'hsl(var(--content-secondary))', margin: '0 0 6px' }}>FREE</p>
+              <p style={{ fontSize: 28, fontWeight: 700, color: 'hsl(var(--foreground))', margin: '0 0 14px' }}>€0<span style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--content-tertiary))' }}>/mese</span></p>
               {['Tracciamento pasti', 'Piano nutrizionale base', 'Workout logging', '1 piano allenamento'].map(f => (
-                <p key={f} style={{ fontSize: 12.5, color: '#6b7280', margin: '4px 0' }}>· {f}</p>
+                <p key={f} style={{ fontSize: 12.5, color: 'hsl(var(--content-tertiary))', margin: '4px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Check size={14} className="text-success" style={{ flexShrink: 0 }} /> {f}
+                </p>
               ))}
             </div>
 
             {/* PRO tile */}
-            <div style={{
-              background: 'linear-gradient(135deg,rgba(99,102,241,.16),rgba(139,92,246,.1))',
-              border: '1px solid rgba(99,102,241,.4)',
+            <div className="bg-primary/8 border border-primary/30" style={{
               borderRadius: 16,
               padding: 20,
               position: 'relative',
@@ -243,7 +210,7 @@ export default function SettingsPage() {
                 <div style={{
                   position: 'absolute', top: 12, right: 12,
                   fontSize: 9, fontWeight: 700, letterSpacing: '.12em',
-                  color: '#8b5cf6', border: '1px solid rgba(139,92,246,.4)',
+                  color: 'hsl(var(--accent))', border: '1px solid rgba(139,92,246,.4)',
                   borderRadius: 5, padding: '2px 7px', textTransform: 'uppercase',
                 }}>
                   ATTIVO
@@ -257,8 +224,8 @@ export default function SettingsPage() {
               }}>
                 PRO
               </p>
-              <p style={{ fontSize: 28, fontWeight: 800, color: '#e7e7ee', margin: '0 0 14px' }}>
-                €14,99<span style={{ fontSize: 13, fontWeight: 500, color: '#a1a1b5' }}>/mese</span>
+              <p style={{ fontSize: 28, fontWeight: 700, color: 'hsl(var(--foreground))', margin: '0 0 14px' }}>
+                €14,99<span style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--content-secondary))' }}>/mese</span>
               </p>
               {[
                 'Tutto di FREE',
@@ -268,16 +235,18 @@ export default function SettingsPage() {
                 'Analisi avanzate',
                 'Piani illimitati',
               ].map(f => (
-                <p key={f} style={{ fontSize: 12.5, color: '#c4c4d4', margin: '4px 0' }}>· {f}</p>
+                <p key={f} style={{ fontSize: 12.5, color: 'hsl(var(--content-secondary))', margin: '4px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Check size={14} className="text-success" style={{ flexShrink: 0 }} /> {f}
+                </p>
               ))}
               {!isPro && (
                 <button
                   onClick={() => toast('Upgrade a Pro', { description: 'I pagamenti saranno disponibili a breve.' })}
+                  className="btn-hero"
                   style={{
                     marginTop: 14, width: '100%',
-                    padding: '9px 15px', border: 'none', borderRadius: 11,
-                    background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                    color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    padding: '9px 15px', borderRadius: 11,
+                    fontSize: 13, cursor: 'pointer',
                   }}
                 >
                   Aggiorna a Pro
@@ -288,12 +257,7 @@ export default function SettingsPage() {
         </div>
 
         {/* ── Preferenze ── */}
-        <div style={{
-          background: '#111118',
-          border: '1px solid #1e1e2e',
-          borderRadius: 20,
-          padding: 24,
-        }}>
+        <div className="card">
           <CapLabel>Preferenze</CapLabel>
           <div>
             <PrefRow label="Unità di misura"  value="Metrico (kg, cm)" />

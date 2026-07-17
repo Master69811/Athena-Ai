@@ -3,37 +3,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { coachApi } from '@/lib/api';
-import { Plus } from 'lucide-react';
+import { Plus, Send, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-
-/* ─── Keyframes ─── */
-const KEYFRAMES = `
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(14px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes logoPulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,.45); }
-    50%       { box-shadow: 0 0 0 8px rgba(99,102,241,0); }
-  }
-  @keyframes blink {
-    0%, 80%, 100% { transform: scale(0.6); opacity: .4; }
-    40%            { transform: scale(1);   opacity: 1; }
-  }
-`;
 
 const SUGGESTIONS_FALLBACK = [
   'Perché il mio recovery è basso?',
   'Quanta proteina mi serve oggi?',
   'Cambia la panca con i manubri',
 ];
-
-const SendIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="22" y1="2" x2="11" y2="13" />
-    <polygon points="22 2 15 22 11 13 2 9 22 2" />
-  </svg>
-);
 
 export default function CoachPage() {
   const [message, setMessage] = useState('');
@@ -145,8 +122,6 @@ export default function CoachPage() {
 
   return (
     <>
-      <style>{KEYFRAMES}</style>
-
       <div style={{
         maxWidth: 820,
         margin: '0 auto',
@@ -160,10 +135,9 @@ export default function CoachPage() {
         <div style={{
           flexShrink: 0,
           padding: '14px 18px',
-          background: '#111118',
+          background: 'hsl(var(--surface))',
           border: '1px solid rgba(99,102,241,.2)',
           borderRadius: 16,
-          boxShadow: '0 0 40px rgba(99,102,241,.08)',
           marginBottom: 8,
           display: 'flex',
           alignItems: 'center',
@@ -174,17 +148,16 @@ export default function CoachPage() {
             width: 40, height: 40, borderRadius: 11,
             background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 17, fontWeight: 800, color: '#fff',
-            animation: 'logoPulse 2.4s ease infinite',
+            fontSize: 17, fontWeight: 700, color: '#fff',
             flexShrink: 0,
           }}>A</div>
 
           {/* Name + status */}
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#e7e7ee', lineHeight: 1.2 }}>Athena</div>
-            <div style={{ fontSize: 12, color: '#22c55e', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: '#22c55e' }} />
-              Online · conosce tutto il tuo profilo
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'hsl(var(--foreground))', lineHeight: 1.2 }}>Athena</div>
+            <div className="text-success" style={{ fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span className="bg-success" style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%' }} />
+              Online
             </div>
           </div>
 
@@ -194,7 +167,7 @@ export default function CoachPage() {
             style={{
               marginLeft: 'auto',
               fontSize: 12,
-              color: '#a1a1b5',
+              color: 'hsl(var(--content-secondary))',
               background: 'transparent',
               border: 'none',
               cursor: 'pointer',
@@ -224,11 +197,11 @@ export default function CoachPage() {
                 background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 margin: '0 auto 18px',
-                fontSize: 28,
-                boxShadow: '0 8px 32px rgba(99,102,241,.3)',
-              }}>✨</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#e7e7ee', marginBottom: 8 }}>Ciao! Sono Athena</div>
-              <div style={{ fontSize: 13, color: '#a1a1b5', maxWidth: 320, margin: '0 auto 28px', lineHeight: 1.6 }}>
+              }}>
+                <Sparkles size={28} color="#fff" />
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'hsl(var(--foreground))', marginBottom: 8 }}>Ciao! Sono Athena</div>
+              <div style={{ fontSize: 13, color: 'hsl(var(--content-secondary))', maxWidth: 320, margin: '0 auto 28px', lineHeight: 1.6 }}>
                 Il tuo coach AI di élite. Chiedimi qualsiasi cosa su allenamento, nutrizione, recupero o tecnica.
               </div>
             </div>
@@ -251,29 +224,29 @@ export default function CoachPage() {
                     width: 30, height: 30, borderRadius: 9, flexShrink: 0,
                     background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 13, fontWeight: 800, color: '#fff',
+                    fontSize: 13, fontWeight: 700, color: '#fff',
                   }}>A</div>
                 )}
 
                 {/* Bubble (+ failed/retry affordance) */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start', gap: 5, maxWidth: '74%' }}>
-                  <div style={isUser ? {
-                    background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                    borderRadius: '16px 16px 4px 16px',
-                    padding: '13px 16px',
-                    fontSize: 14,
-                    lineHeight: 1.55,
-                    color: '#fff',
-                    opacity: msg.failed ? .6 : 1,
-                  } : {
-                    background: '#15151d',
-                    border: '1px solid #1e1e2e',
-                    borderRadius: '16px 16px 16px 4px',
-                    padding: '13px 16px',
-                    fontSize: 14,
-                    lineHeight: 1.55,
-                    color: '#e7e7ee',
-                  }}>
+                  <div
+                    className={isUser ? undefined : 'card-inner'}
+                    style={isUser ? {
+                      background: 'hsl(var(--primary))',
+                      borderRadius: '16px 16px 4px 16px',
+                      padding: '13px 16px',
+                      fontSize: 14,
+                      lineHeight: 1.55,
+                      color: '#fff',
+                      opacity: msg.failed ? .6 : 1,
+                    } : {
+                      borderRadius: '16px 16px 16px 4px',
+                      padding: '13px 16px',
+                      fontSize: 14,
+                      lineHeight: 1.55,
+                      color: 'hsl(var(--foreground))',
+                    }}>
                     {msg.content}
                   </div>
                   {isUser && msg.failed && (
@@ -285,7 +258,7 @@ export default function CoachPage() {
                         padding: 0,
                         fontSize: 11.5,
                         fontWeight: 600,
-                        color: '#f87171',
+                        color: 'hsl(var(--destructive))',
                         cursor: 'pointer',
                       }}
                     >
@@ -304,11 +277,9 @@ export default function CoachPage() {
                 width: 30, height: 30, borderRadius: 9, flexShrink: 0,
                 background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, fontWeight: 800, color: '#fff',
+                fontSize: 13, fontWeight: 700, color: '#fff',
               }}>A</div>
-              <div style={{
-                background: '#15151d',
-                border: '1px solid #1e1e2e',
+              <div className="card-inner" style={{
                 borderRadius: '16px 16px 16px 4px',
                 padding: '13px 16px',
                 display: 'flex', gap: 5, alignItems: 'center',
@@ -339,25 +310,8 @@ export default function CoachPage() {
                 <button
                   key={i}
                   onClick={() => sendMessage(s)}
-                  style={{
-                    fontSize: 12.5,
-                    color: '#a1a1b5',
-                    background: '#15151d',
-                    border: '1px solid #1e1e2e',
-                    padding: '8px 13px',
-                    borderRadius: 10,
-                    cursor: 'pointer',
-                    transition: 'border-color .2s, color .2s',
-                    whiteSpace: 'nowrap',
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = '#6366f1';
-                    e.currentTarget.style.color = '#e7e7ee';
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = '#1e1e2e';
-                    e.currentTarget.style.color = '#a1a1b5';
-                  }}
+                  className="chip hover:border-primary/40"
+                  style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   {s}
                 </button>
@@ -366,15 +320,17 @@ export default function CoachPage() {
           )}
 
           {/* Input row */}
-          <div style={{
-            background: '#111118',
-            border: '1px solid #1e1e2e',
-            borderRadius: 15,
-            padding: '8px 8px 8px 18px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}>
+          <div
+            className="rounded-2xl border border-border-strong focus-within:border-primary/50"
+            style={{
+              background: 'hsl(var(--surface))',
+              padding: '8px 8px 8px 18px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              transition: 'border-color .15s',
+            }}
+          >
             <textarea
               ref={inputRef}
               value={message}
@@ -389,7 +345,7 @@ export default function CoachPage() {
                 outline: 'none',
                 resize: 'none',
                 fontSize: 14,
-                color: '#e7e7ee',
+                color: 'hsl(var(--foreground))',
                 lineHeight: 1.5,
                 minHeight: 24,
                 maxHeight: 128,
@@ -407,16 +363,16 @@ export default function CoachPage() {
               style={{
                 width: 40, height: 40, borderRadius: 11, flexShrink: 0,
                 background: message.trim() && !chatMutation.isPending
-                  ? 'linear-gradient(135deg,#6366f1,#8b5cf6)'
-                  : '#1a1a24',
+                  ? 'hsl(var(--primary))'
+                  : 'hsl(var(--surface-3))',
                 border: 'none',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: message.trim() && !chatMutation.isPending ? '#fff' : '#6b7280',
+                color: message.trim() && !chatMutation.isPending ? '#fff' : 'hsl(var(--content-tertiary))',
                 cursor: message.trim() && !chatMutation.isPending ? 'pointer' : 'default',
                 transition: 'background .2s, color .2s',
               }}
             >
-              <SendIcon />
+              <Send size={16} />
             </button>
           </div>
         </div>
