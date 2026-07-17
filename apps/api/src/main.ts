@@ -9,11 +9,13 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 function validateSecrets(configService: ConfigService): void {
+  // NOTE: no empty string here — `value.includes('')` is true for EVERY
+  // string, which would make validation reject all secrets. Empty/missing
+  // values are already caught by the `!value` check below.
   const PLACEHOLDERS = [
     'your-super-secret-jwt-key-change-this-in-production',
     'your-refresh-secret-key-change-this-in-production',
     'CHANGE_ME',
-    '',
   ];
   const MIN_LENGTH = 32;
 
@@ -40,6 +42,14 @@ async function bootstrap() {
 
   if (configService.get<string>('NODE_ENV') === 'production') {
     validateSecrets(configService);
+  }
+
+  // AI features (coach chat, workout generation, RAG embeddings) need Gemini.
+  // Boot proceeds without it, but surface the misconfiguration loudly in logs.
+  if (!configService.get<string>('GEMINI_API_KEY')) {
+    console.warn(
+      '[STARTUP] GEMINI_API_KEY is not set — all AI endpoints (coach, workout generation, RAG) will fail until it is configured.',
+    );
   }
 
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -130,4 +140,7 @@ async function bootstrap() {
   if (swaggerEnabled) console.log(`📚 Swagger docs: http://localhost:${port}/docs`);
 }
 
-bootstrap();
+bootstrap().catch((err) => {
+  console.error('[STARTUP] Fatal error during bootstrap:', err);
+  process.exit(1);
+});

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,7 +20,16 @@ export class SubscriptionsService {
     if (key) this.stripe = new Stripe(key, { apiVersion: '2024-04-10' as any });
   }
 
+  // Billing endpoints must fail with an intentional 503 (not a TypeError 500)
+  // when Stripe is not configured for this deployment.
+  private ensureStripe(): void {
+    if (!this.stripe) {
+      throw new ServiceUnavailableException('Billing is not configured on this server');
+    }
+  }
+
   async createCheckoutSession(userId: string, tier: 'PRO' | 'PREMIUM' | 'COACH') {
+    this.ensureStripe();
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new Error('User not found');
 
@@ -41,6 +50,7 @@ export class SubscriptionsService {
   }
 
   async handleWebhook(signature: string, payload: Buffer) {
+    this.ensureStripe();
     const webhookSecret = this.config.get('STRIPE_WEBHOOK_SECRET');
     let event: Stripe.Event;
 

@@ -1,13 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 
 interface BlacklistedToken {
   expiresAt: number;
 }
 
 @Injectable()
-export class TokenBlacklistService {
+export class TokenBlacklistService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TokenBlacklistService.name);
   private store = new Map<string, BlacklistedToken>();
+  private cleanupTimer: NodeJS.Timeout | null = null;
 
   private decodeJwt(token: string): any {
     try {
@@ -48,7 +49,7 @@ export class TokenBlacklistService {
   }
 
   onModuleInit() {
-    setInterval(() => {
+    this.cleanupTimer = setInterval(() => {
       const now = Date.now();
       for (const [token, entry] of this.store.entries()) {
         if (entry.expiresAt < now) {
@@ -56,5 +57,14 @@ export class TokenBlacklistService {
         }
       }
     }, 60000);
+    // Don't keep the event loop alive just for the sweeper (tests, shutdown)
+    this.cleanupTimer.unref();
+  }
+
+  onModuleDestroy() {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
   }
 }
