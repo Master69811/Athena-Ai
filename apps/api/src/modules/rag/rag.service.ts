@@ -21,26 +21,41 @@ export interface KnowledgeChunk {
 @Injectable()
 export class RagService {
   private readonly logger = new Logger(RagService.name);
-  private qdrant: QdrantClient;
+  private qdrant: QdrantClient | null = null;
   private genAI: GoogleGenerativeAI;
   private initialized = false;
   private circuitBreaker = { failures: 0, open: false, nextResetAt: 0 };
 
   constructor(private config: ConfigService) {
-    this.qdrant = new QdrantClient({
-      url: config.get('QDRANT_URL', 'http://localhost:6333'),
-      apiKey: config.get('QDRANT_API_KEY') || undefined,
-    });
+    // Do NOT construct QdrantClient here: its constructor synchronously
+    // validates the url and throws on anything malformed (e.g. an empty
+    // string, which ConfigService.get(key, default) does NOT fall back
+    // from — only undefined triggers the default). That throw would
+    // happen during Nest's DI instantiation and crash the entire API at
+    // boot over a RAG misconfiguration. Build it lazily on first real use
+    // instead, inside the same try/catch every caller already handles.
     this.genAI = new GoogleGenerativeAI(config.get('GEMINI_API_KEY', ''));
+  }
+
+  private getQdrant(): QdrantClient {
+    if (!this.qdrant) {
+      const url = (this.config.get<string>('QDRANT_URL') || '').trim() || 'http://localhost:6333';
+      this.qdrant = new QdrantClient({
+        url,
+        apiKey: this.config.get('QDRANT_API_KEY') || undefined,
+      });
+    }
+    return this.qdrant;
   }
 
   private async ensureCollection() {
     if (this.initialized) return;
     try {
-      const collections = await this.qdrant.getCollections();
+      const qdrant = this.getQdrant();
+      const collections = await qdrant.getCollections();
       const exists = collections.collections.some((c) => c.name === COLLECTION);
       if (!exists) {
-        await this.qdrant.createCollection(COLLECTION, {
+        await qdrant.createCollection(COLLECTION, {
           vectors: { size: VECTOR_SIZE, distance: 'Cosine' },
         });
         this.logger.log(`Qdrant collection "${COLLECTION}" created`);
