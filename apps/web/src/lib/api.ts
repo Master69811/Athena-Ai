@@ -16,25 +16,50 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+const AUTH_STORAGE_KEYS = ['accessToken', 'refreshToken', 'userId', 'athena-auth'];
+
+function clearAuthStorage() {
+  AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+}
+
+// Single-flight refresh: the backend rotates refresh tokens, so if several
+// requests hit 401 at once, only ONE refresh call may run — parallel calls
+// would invalidate each other's tokens and log the user out.
+let refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const userId = localStorage.getItem('userId');
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (!userId || !refreshToken) throw new Error('No refresh token available');
+      const { data } = await axios.post(`${API_URL}/api/v1/auth/refresh`, { userId, refreshToken });
+      const payload = data?.data ?? data;
+      localStorage.setItem('accessToken', payload.accessToken);
+      localStorage.setItem('refreshToken', payload.refreshToken);
+      return payload.accessToken as string;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
 api.interceptors.response.use(
   (response) => response.data,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true;
       try {
-        const userId = localStorage.getItem('userId');
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (userId && refreshToken) {
-          const { data } = await axios.post(`${API_URL}/api/v1/auth/refresh`, { userId, refreshToken });
-          localStorage.setItem('accessToken', data.accessToken);
-          localStorage.setItem('refreshToken', data.refreshToken);
-          original.headers.Authorization = `Bearer ${data.accessToken}`;
-          return api(original);
-        }
+        const accessToken = await refreshAccessToken();
+        original.headers.Authorization = `Bearer ${accessToken}`;
+        return api(original);
       } catch {
-        localStorage.clear();
-        window.location.href = '/login';
+        clearAuthStorage();
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error.response?.data || error);

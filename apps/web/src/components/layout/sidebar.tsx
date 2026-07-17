@@ -5,72 +5,20 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
 import { authApi, progressionApi } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
+import { NavIcon, isNavItemActive, type NavIconName } from './nav-items';
 
-const NAV = [
-  {
-    href: '/dashboard',
-    label: 'Dashboard',
-    icon: 'M3 3h7v7H3z M14 3h7v7h-7z M14 14h7v7h-7z M3 14h7v7H3z',
-  },
-  {
-    href: '/workout/session',
-    label: 'Sessione live',
-    icon: 'M6.5 6.5v11 M17.5 6.5v11 M3 9.5v5 M21 9.5v5 M6.5 12h11',
-    exact: true,
-  },
-  {
-    href: '/workout',
-    label: 'Piano workout',
-    icon: 'M8 6h13 M8 12h13 M8 18h13 M3.5 6h.01 M3.5 12h.01 M3.5 18h.01',
-    exact: true,
-  },
-  {
-    href: '/nutrition',
-    label: 'Nutrizione',
-    icon: 'M12 3s4 4.5 4 9a4 4 0 0 1-8 0c0-2 1.2-3.6 1.2-3.6',
-  },
-  {
-    href: '/recovery',
-    label: 'Recupero',
-    icon: 'M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z',
-  },
-  {
-    href: '/progress',
-    label: 'Progress',
-    icon: 'M3 17l6-6 4 4 8-8 M21 7h-5 M21 7v5',
-    exact: true,
-  },
-  {
-    href: '/progress/analytics',
-    label: 'Analytics',
-    icon: 'M3 3v18h18 M7 16v-5 M12 16V8 M17 16v-9',
-  },
-  {
-    href: '/coach',
-    label: 'AI Coach',
-    icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
-  },
-  {
-    href: '/achievements',
-    label: 'Achievement',
-    icon: 'M12 15a5 5 0 1 0 0-10 5 5 0 0 0 0 10z M8.5 13.5L7 21l5-3 5 3-1.5-7.5',
-  },
-  {
-    href: '/settings',
-    label: 'Impostazioni',
-    icon: 'M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6',
-  },
+const NAV: Array<{ href: string; label: string; icon: NavIconName; exact?: boolean }> = [
+  { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { href: '/workout/session', label: 'Sessione live', icon: 'session', exact: true },
+  { href: '/workout', label: 'Piano workout', icon: 'workout', exact: true },
+  { href: '/nutrition', label: 'Nutrizione', icon: 'nutrition' },
+  { href: '/recovery', label: 'Recupero', icon: 'recovery' },
+  { href: '/progress', label: 'Progress', icon: 'progress', exact: true },
+  { href: '/progress/analytics', label: 'Analytics', icon: 'analytics' },
+  { href: '/coach', label: 'AI Coach', icon: 'coach' },
+  { href: '/achievements', label: 'Achievement', icon: 'achievements' },
+  { href: '/settings', label: 'Impostazioni', icon: 'settings' },
 ];
-
-function NavIcon({ d }: { d: string }) {
-  return (
-    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      {d.split(' M').map((seg, i) => (
-        <path key={i} d={i === 0 ? seg : 'M' + seg} />
-      ))}
-    </svg>
-  );
-}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -131,11 +79,16 @@ export function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
+      <nav aria-label="Navigazione principale" style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
         {NAV.map(({ href, label, icon, exact }) => {
-          const isActive = exact ? pathname === href : pathname.startsWith(href);
+          const isActive = isNavItemActive(pathname, href, exact);
           return (
-            <Link key={href} href={href} style={{ textDecoration: 'none' }}>
+            <Link
+              key={href}
+              href={href}
+              style={{ textDecoration: 'none' }}
+              aria-current={isActive ? 'page' : undefined}
+            >
               <div
                 style={{
                   display: 'flex', alignItems: 'center', gap: 11,
@@ -147,7 +100,7 @@ export function Sidebar() {
                 }}
                 className={!isActive ? 'sidebar-item' : ''}
               >
-                <NavIcon d={icon} />
+                <NavIcon name={icon} />
                 <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
                 {isActive && (
                   <span style={{
@@ -178,19 +131,22 @@ export function Sidebar() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div
+          <button
+            type="button"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
             style={{
-              width: 36, height: 36, borderRadius: 10,
+              width: 36, height: 36, borderRadius: 10, border: 'none',
               background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontWeight: 700, fontSize: 15, color: '#fff',
-              cursor: 'pointer',
+              cursor: 'pointer', flexShrink: 0,
             }}
             onClick={handleLogout}
             title="Esci"
+            aria-label="Esci dall'account"
           >
             {initials}
-          </div>
+          </button>
           <div style={{ minWidth: 0 }}>
             <div style={{
               fontSize: 13, fontWeight: 600, color: '#e7e7ee',
