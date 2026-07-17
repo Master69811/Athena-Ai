@@ -7,7 +7,7 @@ import { formatDuration } from '@/lib/utils';
 import { Calendar, Clock, BarChart3, Loader2 } from 'lucide-react';
 
 export default function WorkoutHistoryPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['sessions'],
     queryFn: sessionsApi.getAll,
     select: (res: any) => res.data,
@@ -18,12 +18,24 @@ export default function WorkoutHistoryPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       <h2 className="text-xl font-bold">Storico Allenamenti</h2>
-      {data?.sessions?.length === 0 && (
+      {isError ? (
         <Card className="text-center py-12">
-          <p className="text-muted-foreground">Nessun allenamento completato ancora.</p>
+          <p className="text-muted-foreground mb-3">Impossibile caricare i dati, riprova</p>
+          <button
+            onClick={() => refetch()}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            Riprova
+          </button>
         </Card>
-      )}
-      {data?.sessions?.map((session: any) => (
+      ) : (
+        <>
+          {data?.sessions?.length === 0 && (
+            <Card className="text-center py-12">
+              <p className="text-muted-foreground">Nessun allenamento completato ancora.</p>
+            </Card>
+          )}
+          {data?.sessions?.map((session: any) => (
         <Card key={session.id} className="hover:border-primary/20 transition-colors">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -57,7 +69,9 @@ export default function WorkoutHistoryPage() {
             <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border italic">"{session.aiAnalysis}"</p>
           )}
         </Card>
-      ))}
+          ))}
+        </>
+      )}
     </div>
   );
 }

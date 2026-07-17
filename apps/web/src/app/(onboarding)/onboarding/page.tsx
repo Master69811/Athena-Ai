@@ -272,6 +272,23 @@ export default function OnboardingPage() {
 
   const update = (fields: Partial<typeof data>) => setData(prev => ({ ...prev, ...fields }));
 
+  // Defense in depth: this page has no route-level guard (middleware.ts
+  // intentionally leaves /onboarding unprotected), so a user who already
+  // completed onboarding could land back here (back button, stale bookmark,
+  // a stale client-side redirect) and see a blank wizard. Verify against the
+  // server on mount and leave immediately if they're already done.
+  useEffect(() => {
+    usersApi.getMe()
+      .then((res: any) => {
+        if (res?.data?.profile?.onboardingCompleted) {
+          try { sessionStorage.removeItem(ONBOARDING_DRAFT_KEY); } catch { /* non-fatal */ }
+          router.replace('/dashboard');
+        }
+      })
+      .catch(() => { /* not logged in or transient error — let the wizard render normally */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Persist wizard progress so a failed AI generation (or accidental navigation)
   // doesn't force the user to refill all 7 steps from scratch.
   useEffect(() => {

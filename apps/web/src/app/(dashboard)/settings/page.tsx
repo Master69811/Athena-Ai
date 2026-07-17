@@ -134,7 +134,7 @@ export default function SettingsPage() {
     if (num(form.weightKg) !== undefined)               payload.weightKg               = num(form.weightKg);
     if (num(form.trainingDaysPerWeek) !== undefined)    payload.trainingDaysPerWeek    = num(form.trainingDaysPerWeek);
     if (num(form.sessionDurationMinutes) !== undefined) payload.sessionDurationMinutes = num(form.sessionDurationMinutes);
-    if (form.bio.trim()) payload.bio = form.bio.trim();
+    payload.bio = form.bio.trim();
     updateMutation.mutate(payload);
   };
 
@@ -181,7 +181,7 @@ export default function SettingsPage() {
             <ProfileField label="Età"              value={profile?.age ? `${profile.age} anni` : undefined} />
             <ProfileField label="Peso"             value={profile?.weightKg ? `${profile.weightKg} kg` : undefined} />
             <ProfileField label="Altezza"          value={profile?.heightCm ? `${profile.heightCm} cm` : undefined} />
-            <ProfileField label="Grasso corporeo"  value={profile?.bodyFatPct ? `${profile.bodyFatPct}%` : undefined} />
+            <ProfileField label="Grasso corporeo"  value={profile?.bodyFatPercentage ? `${profile.bodyFatPercentage}%` : undefined} />
           </div>
           {profile?.bio && (
             <div style={{ marginTop: 16 }}>

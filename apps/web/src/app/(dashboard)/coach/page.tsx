@@ -82,6 +82,30 @@ export default function CoachPage() {
     },
   });
 
+  // Hydrate the chat from the most recent persisted conversation on mount,
+  // so navigating away and back (or refreshing) doesn't reset to the empty
+  // welcome screen when a conversation already exists server-side.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const listRes = await coachApi.getConversations();
+        const conversations = listRes?.data;
+        if (cancelled || !Array.isArray(conversations) || conversations.length === 0) return;
+        const latest = conversations[0];
+        const convRes = await coachApi.getConversation(latest.id);
+        const conversation = convRes?.data;
+        if (cancelled || !conversation?.messages?.length) return;
+        setConversationId(conversation.id);
+        setMessages(conversation.messages);
+      } catch {
+        // No persisted conversation available (or request failed) — fall back
+        // to the empty welcome state, which is already the initial state.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);

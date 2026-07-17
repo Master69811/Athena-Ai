@@ -20,6 +20,13 @@ const AUTH_STORAGE_KEYS = ['accessToken', 'refreshToken', 'userId', 'athena-auth
 
 function clearAuthStorage() {
   AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+  // middleware.ts gates every route on this cookie alone. Leaving it set
+  // after a failed refresh caused a /login <-> protected-route redirect
+  // loop for up to 7 days (cookie present -> middleware bounces /login to
+  // /dashboard -> API calls 401 with no tokens -> back to /login).
+  if (typeof document !== 'undefined') {
+    document.cookie = 'athena_session=; path=/; max-age=0';
+  }
 }
 
 // Single-flight refresh: the backend rotates refresh tokens, so if several

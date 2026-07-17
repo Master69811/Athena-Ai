@@ -315,6 +315,9 @@ model BodyMeasurement {
   id            String   @id @default(cuid())
   userId        String
   date          DateTime @default(now())
+  // no per-day uniqueness previously existed: repeated submissions for the
+  // same day (e.g. retries, or the onboarding redirect loop fixed alongside
+  // this) created duplicate rows and corrupted week-over-week delta math.
   weightKg      Float
   bodyFatPct    Float?
   leanMassKg    Float?
@@ -333,9 +336,10 @@ model BodyMeasurement {
   notes         String?
   createdAt     DateTime @default(now())
 
+  @@unique([userId, date])
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, date])
   @@map("body_measurements")
 }
 

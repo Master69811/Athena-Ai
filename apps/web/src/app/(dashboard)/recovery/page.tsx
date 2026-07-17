@@ -172,16 +172,6 @@ function WeekBarChart({ history }: WeekBarChartProps) {
   );
 }
 
-/* ─── fallback data ─────────────────────────────────────── */
-const FALLBACK = {
-  score: 92,
-  sleepHours: 8.2,
-  sleepQuality: 9,
-  stressLevel: 2,
-  energyLevel: 9,
-  steps: 9400,
-};
-
 /* ─── page ──────────────────────────────────────────────── */
 export default function RecoveryPage() {
   const [open, setOpen] = useState(false);
@@ -198,15 +188,16 @@ export default function RecoveryPage() {
     select: (res: any) => (Array.isArray(res.data) ? res.data : []) as Array<{ date: string; score: number }>,
   });
 
-  /* real data present? — otherwise show neutral placeholders, not fabricated numbers */
-  const hasData = !!latest;
-  const rec = latest ?? FALLBACK;
-  const score        = Math.round(rec.score ?? FALLBACK.score);
-  const sleepHours   = rec.sleepHours   ?? FALLBACK.sleepHours;
-  const sleepQuality = rec.sleepQuality ?? FALLBACK.sleepQuality;
-  const stressLevel  = rec.stressLevel  ?? FALLBACK.stressLevel;
-  const energyLevel  = rec.energyLevel  ?? FALLBACK.energyLevel;
-  const steps        = rec.steps        ?? FALLBACK.steps;
+  /* real data present? — the API only sets hasData true when a RecoveryLog
+     actually exists; otherwise it returns nulls, never fabricated numbers */
+  const hasData = !!latest?.hasData;
+  const rec = latest ?? {};
+  const score        = Math.round(rec.score ?? 0);
+  const sleepHours   = rec.sleepHours   ?? 0;
+  const sleepQuality = rec.sleepQuality ?? 0;
+  const stressLevel  = rec.stressLevel  ?? 0;
+  const energyLevel  = rec.energyLevel  ?? 0;
+  const steps        = rec.steps        ?? 0;
 
   const history: Array<{ date: string; score: number }> = historyRaw ?? [];
 
@@ -259,7 +250,7 @@ export default function RecoveryPage() {
               </button>
             </div>
 
-            {!latest && (
+            {!hasData && (
               <p style={{ fontSize: 11, color: '#6b7280', marginTop: 10 }}>
                 Nessun dato ancora — registra il tuo primo recupero
               </p>

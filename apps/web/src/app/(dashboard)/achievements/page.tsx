@@ -44,7 +44,7 @@ const LABEL_CAPS: React.CSSProperties = {
 };
 
 export default function AchievementsPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['achievements'],
     queryFn: gamificationApi.getAchievements,
     select: (res: any) => res.data,
@@ -111,7 +111,28 @@ export default function AchievementsPage() {
         </div>
 
         {/* ── Badge grid ── */}
-        {achievements.length === 0 && !isLoading ? (
+        {isError ? (
+          <div style={{
+            background: '#111118',
+            border: '1px solid #1e1e2e',
+            borderRadius: 20,
+            padding: 48,
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 40, marginBottom: 14 }}>⚠️</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#e7e7ee', marginBottom: 8 }}>Impossibile caricare i traguardi, riprova</div>
+            <button
+              onClick={() => refetch()}
+              style={{
+                marginTop: 12, padding: '9px 18px', border: 'none', borderRadius: 11,
+                background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              Riprova
+            </button>
+          </div>
+        ) : achievements.length === 0 && !isLoading ? (
           <div style={{
             background: '#111118',
             border: '1px solid #1e1e2e',

@@ -208,7 +208,7 @@ export default function NutritionPage() {
     select: (res: any) => res.data,
   });
 
-  const { data: dailyLog } = useQuery({
+  const { data: dailyLog, isError: dailyError, refetch: refetchDaily } = useQuery({
     queryKey: ['nutrition-daily', today],
     queryFn: () => nutritionApi.getDailyLog(today),
     select: (res: any) => res.data,
@@ -225,6 +225,7 @@ export default function NutritionPage() {
     mutationFn: nutritionApi.generatePlan,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nutrition-plan'] });
+      queryClient.invalidateQueries({ queryKey: ['nutrition-daily', today] });
       toast.success('Piano nutrizionale generato da Athena!');
     },
     onError: (e: any) => toast.error(e?.message || 'Generazione piano fallita, riprova'),
@@ -310,7 +311,11 @@ export default function NutritionPage() {
                 <p style={{ fontSize: 13, color: '#a1a1b5', margin: '8px 0 0' }}>
                   Obiettivo: <strong style={{ color: '#e7e7ee' }}>{Math.round(target)} kcal</strong>
                 </p>
-                {!macros && (
+                {dailyError ? (
+                  <p style={{ fontSize: 12, color: '#ef4444', marginTop: 6 }}>
+                    Impossibile caricare i dati, riprova
+                  </p>
+                ) : !macros && (
                   <p style={{ fontSize: 12, color: '#6b7280', marginTop: 6 }}>
                     Nessun pasto registrato oggi
                   </p>
@@ -406,7 +411,28 @@ export default function NutritionPage() {
               </div>
 
               {/* meal list */}
-              {Array.isArray(dailyLog?.logs) && dailyLog.logs.length > 0 ? (
+              {dailyError ? (
+                <div style={{
+                  flex: 1,
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  gap: 12, textAlign: 'center',
+                }}>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: '#e7e7ee', margin: 0 }}>
+                    Impossibile caricare i dati, riprova
+                  </p>
+                  <button
+                    onClick={() => refetchDaily()}
+                    style={{
+                      padding: '9px 15px', border: '1px solid #2a2a3a', borderRadius: 11,
+                      background: '#1a1a24', color: '#a1a1b5', fontSize: 13, fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Riprova
+                  </button>
+                </div>
+              ) : Array.isArray(dailyLog?.logs) && dailyLog.logs.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {dailyLog.logs.map((log: any) => {
                     const kcal = Math.round((log.foodItem?.calories ?? 0) * log.servings);

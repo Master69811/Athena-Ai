@@ -476,7 +476,7 @@ export class RecoveryService {
       this.getRecoveryContextForEngine(userId),
     ]);
 
-    const score = latest.log ? Math.round(latest.score) : Math.round(ctx.avgScore7d || latest.score);
+    const score = latest.log ? Math.round(latest.score as number) : Math.round(ctx.avgScore7d || 0);
     const adaptation = this.computeTrainingAdaptation({
       score,
       engineAction: ctx.engineAction,
@@ -503,10 +503,11 @@ export class RecoveryService {
 
     if (!log) {
       return {
-        score: 75,
-        level: FatigueLevel.NORMAL,
-        recommendation: 'No recovery data yet. Log your sleep and stress daily for personalized recovery insights.',
+        score: null,
+        level: null,
+        recommendation: 'No recovery data yet. Log your first check-in to get personalized recovery insights.',
         log: null,
+        hasData: false,
       };
     }
 
@@ -515,6 +516,7 @@ export class RecoveryService {
       score: log.overallScore,
       level: log.fatigueLevel,
       recommendation: this.getRecommendationForLevel(log.fatigueLevel),
+      hasData: true,
     };
   }
 

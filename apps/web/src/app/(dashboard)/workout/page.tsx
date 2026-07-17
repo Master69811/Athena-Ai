@@ -16,7 +16,7 @@ export default function WorkoutPage() {
   const queryClient = useQueryClient();
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
 
-  const { data: plan, isLoading } = useQuery({
+  const { data: plan, isLoading, isError, refetch } = useQuery({
     queryKey: ['active-plan'],
     queryFn: workoutApi.getActivePlan,
     select: (res: any) => res.data,
@@ -64,7 +64,31 @@ export default function WorkoutPage() {
         .generate-btn { transition: opacity .15s; cursor: pointer; }
       `}</style>
 
-      {!plan ? (
+      {isError ? (
+        /* Error state — distinct from "no plan yet" so users don't get routed
+           into the (currently broken) AI generation endpoint by mistake. */
+        <div style={{
+          background: '#111118', border: '1px solid rgba(239,68,68,.3)', borderRadius: 20, padding: 48,
+          textAlign: 'center',
+        }}>
+          <p style={{ color: '#e7e7ee', fontWeight: 700, fontSize: 20, marginBottom: 8 }}>
+            Impossibile caricare i dati, riprova
+          </p>
+          <p style={{ color: '#a1a1b5', fontSize: 14, marginBottom: 24 }}>
+            Non siamo riusciti a recuperare il tuo piano di allenamento.
+          </p>
+          <button
+            className="generate-btn"
+            onClick={() => refetch()}
+            style={{
+              background: 'transparent', border: '1px solid #2a2a3a', borderRadius: 12,
+              padding: '10px 24px', color: '#e7e7ee', fontWeight: 700, fontSize: 14,
+            }}
+          >
+            Riprova
+          </button>
+        </div>
+      ) : !plan ? (
         /* Empty state */
         <div style={{
           background: '#111118', border: '1px solid #1e1e2e', borderRadius: 20, padding: 48,
@@ -177,6 +201,10 @@ export default function WorkoutPage() {
           }}>
             {days.map((day: any, i: number) => {
               const isToday = day.dayIndex === todayDayIndex;
+              const dayExercises = day.exercises ?? [];
+              const dayRpe = dayExercises.length > 0
+                ? Math.max(...dayExercises.map((e: any) => e.rpeTarget ?? 0))
+                : 0;
               return (
                 <div
                   key={day.id ?? i}
@@ -196,13 +224,13 @@ export default function WorkoutPage() {
                     }}>
                       {DAY_NAMES_SHORT[day.dayIndex] ?? DAY_NAMES_SHORT[i] ?? '—'}
                     </span>
-                    {day.rpeTarget > 0 && (
+                    {dayRpe > 0 && (
                       <span style={{
                         fontSize: 11, fontWeight: 700, color: '#8b5cf6',
                         background: 'rgba(139,92,246,.12)', borderRadius: 6,
                         padding: '2px 8px',
                       }}>
-                        RPE {day.rpeTarget}
+                        RPE {dayRpe}
                       </span>
                     )}
                   </div>
