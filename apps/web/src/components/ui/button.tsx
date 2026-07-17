@@ -10,13 +10,13 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:opacity-90 active:scale-95',
-        gradient: 'bg-gradient-to-r from-primary to-accent text-white hover:opacity-90 active:scale-95 shadow-lg shadow-primary/25',
-        outline: 'border border-border bg-transparent hover:bg-muted text-foreground',
+        default: 'btn-primary',
+        gradient: 'btn-hero',
+        outline: 'border border-border-strong bg-transparent hover:border-primary/50 text-foreground',
         ghost: 'bg-transparent hover:bg-muted text-foreground',
         destructive: 'bg-destructive text-destructive-foreground hover:opacity-90',
         success: 'bg-success text-white hover:opacity-90',
-        glass: 'glass-card hover:border-primary/30 text-foreground',
+        glass: 'card hover:border-primary/30 text-foreground',
       },
       size: {
         sm: 'h-8 px-3 text-sm rounded-lg',
@@ -42,7 +42,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <motion.button
         ref={ref}
-        whileTap={{ scale: 0.97 }}
+        whileTap={{ scale: 0.98 }}
         className={cn(buttonVariants({ variant, size, className }))}
         disabled={disabled || loading}
         aria-busy={loading || undefined}

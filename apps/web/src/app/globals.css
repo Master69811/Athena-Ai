@@ -4,22 +4,39 @@
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 91%;
-    --surface: 240 10% 7%;
-    --surface-elevated: 240 10% 10%;
-    --border: 240 8% 14%;
-    --primary: 239 84% 67%;
+    /* Background elevation ladder */
+    --background: 240 25% 4.5%;      /* #09090F — page background */
+    --foreground: 240 20% 95%;       /* #F0F0F5 — primary text */
+    --surface: 240 17% 8%;           /* #111118 — cards (surface-1) */
+    --surface-elevated: 240 15% 10%; /* #15151D — nested tiles (surface-2) */
+    --surface-3: 240 16% 12%;        /* #1A1A24 — interactive muted */
+
+    /* Borders */
+    --border: 240 21% 15%;           /* #1E1E2E — default card border */
+    --border-strong: 240 16% 20%;    /* #2A2A3A — inputs, secondary buttons */
+
+    /* Text hierarchy */
+    --content-secondary: 240 11% 67%; /* #A1A1B5 */
+    --content-tertiary: 240 6% 46%;   /* #6F6F7C — captions, placeholders */
+    --content-disabled: 240 8% 32%;   /* #4B4B58 */
+
+    /* Brand */
+    --primary: 239 84% 67%;          /* #6366F1 */
     --primary-foreground: 0 0% 100%;
     --primary-muted: 239 84% 67% / 0.15;
-    --accent: 262 80% 65%;
+    --accent: 262 83% 66%;           /* #8B5CF6 */
     --accent-foreground: 0 0% 100%;
-    --muted: 240 8% 14%;
-    --muted-foreground: 240 5% 55%;
-    --success: 142 71% 45%;
-    --warning: 38 92% 50%;
-    --destructive: 0 84% 60%;
+
+    --muted: 240 16% 12%;
+    --muted-foreground: 240 11% 67%;
+
+    /* Semantic — one hex each, used via the tint pattern (bg /.10, border /.25, text solid) */
+    --success: 142 71% 45%;          /* #22C55E */
+    --warning: 38 92% 50%;           /* #F59E0B */
+    --destructive: 0 84% 60%;        /* #EF4444 */
     --destructive-foreground: 0 0% 98%;
+    --info: 199 89% 60%;             /* #38BDF8 */
+
     --radius: 0.75rem;
   }
 
@@ -28,7 +45,12 @@
     --foreground: 240 10% 3.9%;
     --surface: 0 0% 96%;
     --surface-elevated: 0 0% 100%;
+    --surface-3: 240 4.8% 93%;
     --border: 240 5.9% 90%;
+    --border-strong: 240 5.9% 82%;
+    --content-secondary: 240 5% 40%;
+    --content-tertiary: 240 3.8% 46.1%;
+    --content-disabled: 240 3.8% 70%;
     --primary: 239 84% 67%;
     --primary-foreground: 0 0% 100%;
     --primary-muted: 239 84% 67% / 0.1;
@@ -40,6 +62,7 @@
     --warning: 38 92% 50%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
+    --info: 199 89% 48%;
   }
 
   * {
@@ -55,15 +78,15 @@
 
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #1e1e2e; border-radius: 8px; border: 2px solid #09090f; }
-  ::-webkit-scrollbar-thumb:hover { background: #2a2a3a; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 8px; border: 2px solid hsl(var(--background)); }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--border-strong)); }
 
   input[type=range] {
     -webkit-appearance: none;
     appearance: none;
     height: 6px;
     border-radius: 3px;
-    background: #1e1e2e;
+    background: hsl(var(--border));
     outline: none;
   }
   input[type=range]::-webkit-slider-thumb {
@@ -72,20 +95,68 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: #6366f1;
+    background: hsl(var(--primary));
     cursor: pointer;
-    box-shadow: 0 0 12px rgba(99,102,241,.6);
+    box-shadow: 0 1px 2px rgb(0 0 0 / .3);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: .01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: .01ms !important;
+    }
   }
 }
 
 @layer components {
-  .glass-card {
-    @apply bg-surface/80 backdrop-blur-xl border border-border/50 rounded-2xl;
+  /* ─── Typographic scale — six styles, nothing else ─────────── */
+  .text-display { font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; }
+  .text-title   { font-size: 20px; line-height: 1.25; font-weight: 700; letter-spacing: -0.01em; }
+  .text-heading { font-size: 16px; line-height: 1.35; font-weight: 600; }
+  .text-body    { font-size: 14px; line-height: 1.55; font-weight: 400; }
+  .text-caption { font-size: 12px; line-height: 1.4;  font-weight: 500; }
+  .label-caps {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    color: hsl(var(--content-tertiary));
+    text-transform: uppercase;
   }
 
-  .glass-card-elevated {
-    @apply bg-surface-elevated/90 backdrop-blur-xl border border-border/50 rounded-2xl;
+  /* ─── Elevation system — three levels, no colored glows ────── */
+  .card {
+    background: hsl(var(--surface));
+    border: 1px solid hsl(var(--border));
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 1px 2px rgb(0 0 0 / .3), 0 8px 24px -16px rgb(0 0 0 / .5);
   }
+  .card-inner {
+    background: hsl(var(--surface-elevated));
+    border: 1px solid hsl(var(--border));
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .card-overlay {
+    background: hsl(var(--surface-elevated));
+    border: 1px solid hsl(var(--border-strong));
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgb(0 0 0 / .4), 0 24px 48px -12px rgb(0 0 0 / .6);
+  }
+  .card-interactive {
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+  }
+  .card-interactive:hover {
+    border-color: hsl(var(--border-strong));
+    box-shadow: 0 2px 4px rgb(0 0 0 / .3), 0 12px 32px -16px rgb(0 0 0 / .6);
+    transform: translateY(-1px);
+  }
+
+  /* Back-compat aliases so not-yet-migrated pages keep working identically */
+  .glass-card { @apply card; backdrop-filter: none; }
+  .glass-card-elevated { @apply card-overlay; }
+  .card-athena { @apply card; }
 
   .gradient-text {
     background: linear-gradient(135deg, #a5b4fc, #c4b5fd);
@@ -94,24 +165,59 @@
     -webkit-text-fill-color: transparent;
   }
 
-  .glow-border {
-    box-shadow: 0 0 0 1px hsl(var(--primary) / 0.3), 0 0 20px hsl(var(--primary) / 0.1);
-  }
-
-  .metric-card {
-    @apply bg-[#111118] border border-[#1e1e2e] rounded-2xl p-5 transition-all duration-200 hover:-translate-y-1;
-  }
-
+  /* ─── Buttons ────────────────────────────────────────────────
+     Color/shadow only — height, padding, radius and font-size stay
+     with the Button component's cva `size` variants so the two
+     compose instead of fighting over Tailwind's layer specificity.
+     .btn-hero: the ONE gradient CTA per screen.
+     .btn-primary: solid brand color, for all other primary actions.
+     .btn-secondary: neutral surface action. */
   .btn-primary {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
-    @apply text-white font-bold px-6 py-3 rounded-xl transition-all duration-200
-           hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
-    box-shadow: 0 10px 30px rgba(99,102,241,.35);
+    background: hsl(var(--primary));
+    color: #fff;
+    transition: background .15s, box-shadow .15s;
+    box-shadow: 0 1px 2px rgb(0 0 0 / .3), 0 4px 12px -4px hsl(var(--primary) / .5);
   }
+  .btn-primary:hover:not(:disabled) { background: hsl(239 84% 62%); }
+
+  .btn-hero {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    transition: filter .15s, box-shadow .15s;
+    box-shadow: 0 1px 2px rgb(0 0 0 / .3), 0 4px 12px -4px hsl(var(--primary) / .5);
+  }
+  .btn-hero:hover:not(:disabled) { filter: brightness(1.06); }
+
+  .btn-secondary {
+    background: hsl(var(--surface-3));
+    border: 1px solid hsl(var(--border-strong));
+    color: hsl(var(--foreground));
+    font-weight: 600;
+    transition: border-color .15s, background .15s;
+  }
+  .btn-secondary:hover:not(:disabled) { border-color: hsl(var(--primary) / .5); }
 
   .btn-ghost {
     @apply bg-transparent text-foreground font-medium px-4 py-2 rounded-xl
            transition-all duration-200 hover:bg-muted active:scale-95;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    background: hsl(var(--surface-elevated));
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--content-secondary));
+  }
+  .chip-active {
+    background: hsl(var(--primary) / .15);
+    color: hsl(var(--primary));
+    border: 1px solid hsl(var(--primary) / .4);
   }
 
   .input-field {
@@ -119,21 +225,6 @@
            text-foreground placeholder:text-muted-foreground
            focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary
            transition-all duration-200;
-  }
-
-  .card-athena {
-    background: #111118;
-    border: 1px solid #1e1e2e;
-    border-radius: 20px;
-    padding: 24px;
-  }
-
-  .label-caps {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: .14em;
-    color: #6b7280;
-    text-transform: uppercase;
   }
 }
 
@@ -187,28 +278,9 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes logoPulse {
-  0%,100% { box-shadow: 0 0 16px rgba(99,102,241,.55), 0 0 0 0 rgba(99,102,241,.45); }
-  50%      { box-shadow: 0 0 26px rgba(99,102,241,.9), 0 0 0 7px rgba(99,102,241,0); }
-}
-
 @keyframes barGrow {
   from { transform: scaleX(0); }
   to   { transform: scaleX(1); }
-}
-
-@keyframes flowDash {
-  to { stroke-dashoffset: -24; }
-}
-
-@keyframes floatNode {
-  0%,100% { opacity: .35; }
-  50%      { opacity: .9; }
-}
-
-@keyframes pulseGlow {
-  0%,100% { box-shadow: 0 0 0 0 rgba(99,102,241,.4); }
-  50%      { box-shadow: 0 0 0 8px rgba(99,102,241,0); }
 }
 
 @keyframes shimmer {
@@ -216,9 +288,7 @@
   100% { background-position:  200% 0; }
 }
 
-.animate-fade-up { animation: fadeUp .4s ease both; }
-.animate-logo-pulse { animation: logoPulse 2.6s ease-in-out infinite; }
-.animate-pulse-glow { animation: pulseGlow 2s ease-in-out infinite; }
+.animate-fade-up { animation: fadeUp .3s var(--ease-out-quart, cubic-bezier(0.2,0,0,1)) both; }
 
 /* ─── Responsive grid overrides (mobile ≤767px) ─────────────────
    Inline styles set the desktop grid; these !important rules win
