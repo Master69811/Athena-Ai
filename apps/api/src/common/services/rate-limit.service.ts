@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 
 const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
 const RATE_LIMIT_MAX_ATTEMPTS = 5;
@@ -9,9 +9,10 @@ interface RateLimitEntry {
 }
 
 @Injectable()
-export class RateLimitService {
+export class RateLimitService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RateLimitService.name);
   private store = new Map<string, RateLimitEntry>();
+  private cleanupTimer?: NodeJS.Timeout;
 
   async checkLoginAttempt(identifier: string): Promise<{ allowed: boolean; remaining: number }> {
     const key = `ratelimit:login:${identifier}`;
@@ -38,7 +39,7 @@ export class RateLimitService {
   }
 
   onModuleInit() {
-    setInterval(() => {
+    this.cleanupTimer = setInterval(() => {
       const now = Date.now();
       for (const [key, entry] of this.store.entries()) {
         if (entry.expiresAt < now) {
@@ -46,5 +47,11 @@ export class RateLimitService {
         }
       }
     }, 60000);
+    // Don't let the sweeper keep the process alive (graceful shutdown, tests).
+    this.cleanupTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
   }
 }

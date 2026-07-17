@@ -45,16 +45,34 @@ async function bootstrap() {
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(compression());
 
-  const allowedOrigins = [frontendUrl, 'http://localhost:3000'];
+  const isProduction = configService.get<string>('NODE_ENV') === 'production';
+
+  // Exact-match origins: the deployed frontend, local dev, plus any extras
+  // from CORS_ORIGINS (comma-separated) — e.g. Vercel preview URLs.
+  const allowedOrigins = new Set(
+    [
+      frontendUrl,
+      'http://localhost:3000',
+      ...(configService.get<string>('CORS_ORIGINS', '').split(',') ?? []),
+    ]
+      .map((o) => o.trim().replace(/\/$/, ''))
+      .filter(Boolean),
+  );
+
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, curl, Swagger)
       if (!origin) return callback(null, true);
+      // SECURITY: credentialed CORS must not trust entire shared-hosting
+      // platforms (*.vercel.app / *.onrender.com) in production — anyone can
+      // deploy there. Wildcards are only honored outside production.
       const allowed =
-        allowedOrigins.includes(origin) ||
-        /\.vercel\.app$/.test(origin) ||
-        /\.onrender\.com$/.test(origin) ||
-        /\.railway\.app$/.test(origin);
+        allowedOrigins.has(origin) ||
+        (!isProduction &&
+          (/\.vercel\.app$/.test(origin) || /\.onrender\.com$/.test(origin) || /\.railway\.app$/.test(origin)));
+      if (!allowed) {
+        console.warn(`[CORS] Blocked origin: ${origin}. Add it to FRONTEND_URL or CORS_ORIGINS if legitimate.`);
+      }
       callback(allowed ? null : new Error('Not allowed by CORS'), allowed);
     },
     credentials: true,
@@ -77,6 +95,10 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
 
+  // Swagger is exposed only outside production (or with SWAGGER_ENABLED=true)
+  // to avoid advertising the full API surface publicly.
+  const swaggerEnabled = !isProduction || configService.get<string>('SWAGGER_ENABLED') === 'true';
+
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Athena AI — Fitness Platform API')
     .setDescription('The ultimate AI-powered fitness coaching platform API')
@@ -96,14 +118,16 @@ async function bootstrap() {
     .addTag('trainer', 'Personal trainer features')
     .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document, {
-    swaggerOptions: { persistAuthorization: true },
-  });
+  if (swaggerEnabled) {
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+  }
 
   await app.listen(port);
   console.log(`🚀 Athena AI API running on: http://localhost:${port}`);
-  console.log(`📚 Swagger docs: http://localhost:${port}/docs`);
+  if (swaggerEnabled) console.log(`📚 Swagger docs: http://localhost:${port}/docs`);
 }
 
 bootstrap();

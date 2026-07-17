@@ -43,6 +43,9 @@ services:
         sync: false
       - key: QDRANT_API_KEY
         sync: false
+      # Optional extras (set in dashboard if needed):
+      # CORS_ORIGINS   — comma-separated additional allowed origins (e.g. Vercel preview URLs)
+      # SWAGGER_ENABLED — "true" to expose /docs in production (off by default)
 
   - type: keyvalue
     name: athena-redis

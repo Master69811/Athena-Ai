@@ -4,6 +4,7 @@ import { Request, Response } from 'express';
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
+  private readonly isProduction = process.env.NODE_ENV === 'production';
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -11,7 +12,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Internal server error';
+    let message: string | string[] = 'Internal server error';
     let error = 'Internal Server Error';
 
     if (exception instanceof HttpException) {
@@ -24,8 +25,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = String(exceptionResponse);
       }
     } else if (exception instanceof Error) {
-      message = exception.message;
-      this.logger.error(`Unhandled error: ${exception.message}`, exception.stack);
+      // Always log the real error server-side, but never expose internal
+      // details (DB errors, stack hints, file paths) to clients in production.
+      this.logger.error(`Unhandled error on ${request.method} ${request.url}: ${exception.message}`, exception.stack);
+      if (!this.isProduction) {
+        message = exception.message;
+      }
+    } else {
+      this.logger.error(`Unhandled non-Error exception on ${request.method} ${request.url}: ${String(exception)}`);
     }
 
     response.status(status).json({
