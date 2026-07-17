@@ -55,8 +55,23 @@ DATABASE_URL, FRONTEND_URL=https://athena-ai-api.vercel.app, JWT_SECRET, JWT_REF
 - Settings: campo body-fat % corretto (nome campo sbagliato), Bio ora si cancella correttamente
 - Achievements: distingue errore API da lista vuota
 
-**STATO TEST END-TO-END (17/07 17:30 UTC)**: testato dopo attesa di ~5 minuti dal push di `6a90e07` — il fix di idempotenza onboarding NON risulta ancora attivo in produzione (il secondo POST /users/onboarding sovrascrive ancora il profilo invece di fare no-op con messaggio "Onboarding was already completed."). Il codice locale è verificato corretto. Sospetto: Render non ha ancora completato il deploy dell'ultimo commit, oppure il deploy è bloccato/fallito.
-**PROSSIMO STEP (bloccato in attesa dell'utente)**: utente deve controllare Render → Events per lo stato del deploy di `e3fa5e0`/`6a90e07`, forzare "Manual Deploy" se necessario, poi confermare quando è "Live" per ripetere il test di idempotenza e la generazione AI (serve anche verificare/aggiornare GEMINI_MODEL su Render se impostato esplicitamente, dato che ancora restituisce 503).
+## 🎉 STATO FINALE (17/07 17:57 UTC): TUTTO FUNZIONANTE END-TO-END
+
+Dopo deploy confermato live (commit de788d9) + utente ha aggiunto `GEMINI_MODEL=gemini-2.5-flash` su Render (mancava del tutto prima):
+
+- ✅ Idempotenza onboarding: secondo tentativo → "Onboarding was already completed.", nome originale preservato
+- ✅ **Generazione piano AI: HTTP 201**, piano reale generato ("Beginner Hypertrophy PPLU Split" con descrizione, metodologia, split, giorni/settimana)
+- ✅ Registrazione, login, onboarding, CORS, database, tutto verificato funzionante
+
+**App completamente operativa in produzione.** Tutti i 15 bug trovati dall'audit multi-agente sono stati corretti, testati e deployati:
+- 3 critici (loop onboarding, sicurezza refresh token, modello AI deprecato)
+- 9 da sweep QA (dati finti, cache stantia, gestione errori, ecc.)
+- 3 di deploy/infra (migrazioni DB, RAG boot crash, CORS)
+
+**Prossimi passi opzionali (non bloccanti)**:
+- Migrare da `@google/generative-ai` (SDK deprecato da agosto 2025) a `@google/genai` (raccomandazione audit, priorità bassa)
+- Considerare upgrade Render da Free a Starter ($7/mo) per evitare cold-start di 50s
+- Ri-ingest della knowledge base RAG su Qdrant (ora che QDRANT_API_KEY è configurata)
 
 ## ➡️ PROSSIMI PASSI (in ordine)
 1. **Test + build** dei 2 file sopra: `cd apps/api && pnpm exec jest --silent && pnpm exec nest build` per il backend; per il frontend verificare tsc/build Next.js
