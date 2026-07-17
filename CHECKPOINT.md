@@ -55,7 +55,8 @@ DATABASE_URL, FRONTEND_URL=https://athena-ai-api.vercel.app, JWT_SECRET, JWT_REF
 - Settings: campo body-fat % corretto (nome campo sbagliato), Bio ora si cancella correttamente
 - Achievements: distingue errore API da lista vuota
 
-**PROSSIMO STEP**: aspettare redeploy Render (~2-3 min), poi ripetere test end-to-end completo (registrazione → onboarding → generazione AI) per confermare tutti i fix in produzione. Se GEMINI_MODEL è impostato esplicitamente su Render, ricordare all'utente di aggiornarlo.
+**STATO TEST END-TO-END (17/07 17:30 UTC)**: testato dopo attesa di ~5 minuti dal push di `6a90e07` — il fix di idempotenza onboarding NON risulta ancora attivo in produzione (il secondo POST /users/onboarding sovrascrive ancora il profilo invece di fare no-op con messaggio "Onboarding was already completed."). Il codice locale è verificato corretto. Sospetto: Render non ha ancora completato il deploy dell'ultimo commit, oppure il deploy è bloccato/fallito.
+**PROSSIMO STEP (bloccato in attesa dell'utente)**: utente deve controllare Render → Events per lo stato del deploy di `e3fa5e0`/`6a90e07`, forzare "Manual Deploy" se necessario, poi confermare quando è "Live" per ripetere il test di idempotenza e la generazione AI (serve anche verificare/aggiornare GEMINI_MODEL su Render se impostato esplicitamente, dato che ancora restituisce 503).
 
 ## ➡️ PROSSIMI PASSI (in ordine)
 1. **Test + build** dei 2 file sopra: `cd apps/api && pnpm exec jest --silent && pnpm exec nest build` per il backend; per il frontend verificare tsc/build Next.js
