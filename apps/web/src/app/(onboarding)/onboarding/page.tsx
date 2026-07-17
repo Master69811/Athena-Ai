@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { usersApi, workoutApi } from '@/lib/api';
+import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
@@ -245,6 +246,7 @@ function GenerationFailedScreen({ retrying, onRetry, onGoToWorkout }: { retrying
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { user, setUser } = useAuthStore();
   const [step, setStep] = useState(() => {
     try {
       const saved = sessionStorage.getItem(ONBOARDING_DRAFT_KEY);
@@ -293,8 +295,19 @@ export default function OnboardingPage() {
     setLoading(true);
     let onboardingDone = false;
     try {
-      await usersApi.completeOnboarding(data);
+      const response: any = await usersApi.completeOnboarding(data);
       onboardingDone = true;
+      // AppLayout gates every protected route on user.profile.onboardingCompleted
+      // from the persisted auth store. That store is only ever written at
+      // login/register (always onboardingCompleted:false at that point) and was
+      // never refreshed after onboarding finished, so AppLayout kept bouncing
+      // freshly-onboarded users straight back to a blank /onboarding. Update the
+      // cached profile here, synchronously before any navigation, so the guard
+      // sees the true value immediately.
+      const updatedProfile = response?.data?.profile;
+      if (updatedProfile && user) {
+        setUser({ ...user, profile: updatedProfile });
+      }
       setGeneratingPlan(true);
       await workoutApi.generateAI();
       setGeneratingPlan(false);

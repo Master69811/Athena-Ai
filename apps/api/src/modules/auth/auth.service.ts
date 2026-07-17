@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException, BadRequestException, ConflictExcepti
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
+import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -76,10 +77,29 @@ export class AuthService {
   }
 
   async refreshTokens(userId: string, refreshToken: string) {
+    // Cryptographically verify the token FIRST: signature + expiry. Without
+    // this, an expired or forged token could still reach the bcrypt
+    // comparison below and (due to a separate bug fixed alongside this one)
+    // be accepted as valid.
+    try {
+      const payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: this.configService.get('JWT_REFRESH_SECRET'),
+      });
+      if (payload.sub !== userId) throw new UnauthorizedException('Invalid refresh token');
+    } catch {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.refreshToken) throw new UnauthorizedException();
 
-    const tokenMatch = await bcrypt.compare(refreshToken, user.refreshToken);
+    // bcrypt truncates its input at 72 bytes. A raw JWT's header+sub+email
+    // prefix is >=72 bytes and identical across every token minted for the
+    // same user, so comparing the raw token let ANY previously-issued
+    // refresh token pass forever, defeating rotation entirely. Hash a
+    // fixed-length SHA-256 digest of the token instead, so the full token
+    // (including its unique iat/exp) is actually covered by bcrypt.
+    const tokenMatch = await bcrypt.compare(this.hashTokenForBcrypt(refreshToken), user.refreshToken);
     if (!tokenMatch) throw new UnauthorizedException('Invalid refresh token');
 
     const tokens = await this.generateTokens(user.id, user.email);
@@ -143,8 +163,13 @@ export class AuthService {
   }
 
   private async storeRefreshToken(userId: string, refreshToken: string) {
-    const hashedToken = await bcrypt.hash(refreshToken, 10);
+    const hashedToken = await bcrypt.hash(this.hashTokenForBcrypt(refreshToken), 10);
     await this.prisma.user.update({ where: { id: userId }, data: { refreshToken: hashedToken } });
+  }
+
+  /** Fixed-length (64 hex chars) digest so bcrypt's 72-byte input limit never truncates a full-length JWT. */
+  private hashTokenForBcrypt(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
   }
 
   private sanitizeUser(user: any) {

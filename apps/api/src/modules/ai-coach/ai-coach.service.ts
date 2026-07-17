@@ -213,7 +213,7 @@ ${
     // RAG: retrieve relevant knowledge chunks before building the prompt
     const knowledgeChunks = await this.ragService.retrieve(message);
     const systemPrompt = await this.buildSystemPrompt(userId, knowledgeChunks);
-    const modelName = this.configService.get('GEMINI_MODEL', 'gemini-2.0-flash');
+    const modelName = this.configService.get('GEMINI_MODEL', 'gemini-2.5-flash');
 
     const model = this.genAI.getGenerativeModel({
       model: modelName,
@@ -273,7 +273,7 @@ ${
   async generateStructuredPlan(userId: string, request: string): Promise<WorkoutPlanStructured> {
     sanitizeInput(request);
     const systemPrompt = await this.buildSystemPrompt(userId);
-    const modelName = this.configService.get('GEMINI_MODEL', 'gemini-2.0-flash');
+    const modelName = this.configService.get('GEMINI_MODEL', 'gemini-2.5-flash');
     const model = this.genAI.getGenerativeModel({
       model: modelName,
       systemInstruction:

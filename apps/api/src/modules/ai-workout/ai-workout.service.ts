@@ -86,7 +86,7 @@ Generate a complete ${profile.trainingDaysPerWeek}-day program. Return ONLY this
   ]
 }`;
 
-    const modelName = this.configService.get('GEMINI_MODEL', 'gemini-2.0-flash');
+    const modelName = this.configService.get('GEMINI_MODEL', 'gemini-2.5-flash');
     const model = this.genAI.getGenerativeModel({
       model: modelName,
       systemInstruction: systemPrompt,
