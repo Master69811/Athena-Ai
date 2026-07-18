@@ -110,25 +110,38 @@ Generate a complete ${profile.trainingDaysPerWeek}-day program. Return ONLY this
     const model = this.genAI.getGenerativeModel({
       model: modelName,
       systemInstruction: systemPrompt,
-      generationConfig: { maxOutputTokens: 8192, temperature: 0.7 },
+      // Lower temperature = more reliable structured JSON; higher token cap so
+      // multi-day plans are never truncated mid-JSON (which would fail parsing).
+      generationConfig: { maxOutputTokens: 16384, temperature: 0.4 },
     });
 
-    let content: string;
-    try {
-      const result = await model.generateContent(userMessage);
-      content = result.response.text();
-    } catch (error) {
-      this.logger.error(`Gemini API call failed: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
-      throw new ServiceUnavailableException('Generazione del piano AI temporaneamente non disponibile. Riprova tra qualche minuto.');
+    // Gemini (especially the free tier) throws transient errors / rate limits.
+    // Retry the whole generate+parse a few times with backoff before giving up,
+    // so a single flaky response doesn't fail the user's plan generation.
+    const parsePlan = (raw: string): any => {
+      const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('No JSON object found in AI response');
+      return JSON.parse(match[0]);
+    };
+
+    let planData: any = null;
+    let lastError: unknown = null;
+    const RETRY_DELAYS = [0, 1200, 3000];
+    for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
+      if (RETRY_DELAYS[attempt] > 0) await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
+      try {
+        const result = await model.generateContent(userMessage);
+        planData = parsePlan(result.response.text());
+        break;
+      } catch (error) {
+        lastError = error;
+        this.logger.warn(`AI workout generation attempt ${attempt + 1} failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
 
-    let planData: any;
-    try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('No JSON found in response');
-      planData = JSON.parse(jsonMatch[0]);
-    } catch (error) {
-      this.logger.error(`Failed to parse AI workout plan response: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
+    if (!planData) {
+      this.logger.error(`AI workout generation failed after retries: ${lastError instanceof Error ? lastError.message : String(lastError)}`, lastError instanceof Error ? lastError.stack : undefined);
       throw new ServiceUnavailableException('Generazione del piano AI temporaneamente non disponibile. Riprova tra qualche minuto.');
     }
 
