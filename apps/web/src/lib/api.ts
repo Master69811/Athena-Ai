@@ -16,25 +16,57 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+const AUTH_STORAGE_KEYS = ['accessToken', 'refreshToken', 'userId', 'athena-auth'];
+
+function clearAuthStorage() {
+  AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+  // middleware.ts gates every route on this cookie alone. Leaving it set
+  // after a failed refresh caused a /login <-> protected-route redirect
+  // loop for up to 7 days (cookie present -> middleware bounces /login to
+  // /dashboard -> API calls 401 with no tokens -> back to /login).
+  if (typeof document !== 'undefined') {
+    document.cookie = 'athena_session=; path=/; max-age=0';
+  }
+}
+
+// Single-flight refresh: the backend rotates refresh tokens, so if several
+// requests hit 401 at once, only ONE refresh call may run — parallel calls
+// would invalidate each other's tokens and log the user out.
+let refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const userId = localStorage.getItem('userId');
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (!userId || !refreshToken) throw new Error('No refresh token available');
+      const { data } = await axios.post(`${API_URL}/api/v1/auth/refresh`, { userId, refreshToken });
+      const payload = data?.data ?? data;
+      localStorage.setItem('accessToken', payload.accessToken);
+      localStorage.setItem('refreshToken', payload.refreshToken);
+      return payload.accessToken as string;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
 api.interceptors.response.use(
   (response) => response.data,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    if (error.response?.status === 401 && original && !original._retry) {
       original._retry = true;
       try {
-        const userId = localStorage.getItem('userId');
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (userId && refreshToken) {
-          const { data } = await axios.post(`${API_URL}/api/v1/auth/refresh`, { userId, refreshToken });
-          localStorage.setItem('accessToken', data.accessToken);
-          localStorage.setItem('refreshToken', data.refreshToken);
-          original.headers.Authorization = `Bearer ${data.accessToken}`;
-          return api(original);
-        }
+        const accessToken = await refreshAccessToken();
+        original.headers.Authorization = `Bearer ${accessToken}`;
+        return api(original);
       } catch {
-        localStorage.clear();
-        window.location.href = '/login';
+        clearAuthStorage();
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error.response?.data || error);
@@ -66,7 +98,8 @@ export const workoutApi = {
   getPlan: (id: string) => api.get(`/workout-plans/${id}`),
   activatePlan: (id: string) => api.put(`/workout-plans/${id}/activate`),
   deletePlan: (id: string) => api.delete(`/workout-plans/${id}`),
-  generateAI: () => api.post('/ai-workout/generate'),
+  generateAI: (opts?: { methodology?: string; goalType?: string; trainingDaysPerWeek?: number; sessionDurationMinutes?: number }) =>
+    api.post('/ai-workout/generate', opts ?? {}),
 };
 
 // Sessions
@@ -95,6 +128,8 @@ export const recoveryApi = {
   log: (data: any) => api.post('/recovery/log', data),
   getLatest: () => api.get('/recovery/latest'),
   getHistory: (days?: number) => api.get('/recovery/history', { params: { days } }),
+  getSnapshot: () => api.get('/recovery/snapshot'),
+  getReadiness: () => api.get('/recovery/readiness'),
 };
 
 // AI Coach
@@ -112,8 +147,49 @@ export const exercisesApi = {
   getHistory: (id: string) => api.get(`/exercises/${id}/history`),
 };
 
+// Body Weight Engine
+export const bodyWeightApi = {
+  log: (data: { date: string; weightKg: number; notes?: string }) => api.post('/body-weight/log', data),
+  getHistory: (days?: number) => api.get('/body-weight/history', { params: { days } }),
+  getSnapshot: () => api.get('/body-weight/snapshot'),
+};
+
+// Nutrition Engine
+export const nutritionEngineApi = {
+  getDecisions: (params?: { limit?: number; unreadOnly?: boolean }) =>
+    api.get('/nutrition-engine/decisions', { params }),
+  getUnreadCount: () => api.get('/nutrition-engine/decisions/unread-count'),
+  applyDecision: (id: string) => api.put(`/nutrition-engine/decisions/${id}/apply`),
+  markRead: (id: string) => api.put(`/nutrition-engine/decisions/${id}/read`),
+  markAllRead: () => api.put('/nutrition-engine/decisions/read-all'),
+  run: () => api.post('/nutrition-engine/run'),
+  getCompliance: () => api.get('/nutrition-engine/compliance'),
+};
+
+// Analytics
+export const analyticsApi = {
+  volumeByMuscle: (weeks?: number) => api.get('/analytics/volume/muscle-groups', { params: { weeks } }),
+  volumeTrend: (weeks?: number) => api.get('/analytics/volume/trend', { params: { weeks } }),
+  strength: (exerciseId: string) => api.get(`/analytics/strength/${exerciseId}`),
+  frequency: (weeks?: number) => api.get('/analytics/frequency', { params: { weeks } }),
+  strengthScore: () => api.get('/analytics/strength-score'),
+};
+
+// Gamification
+export const gamificationApi = {
+  getAchievements: () => api.get('/gamification/achievements'),
+  getStreaks: () => api.get('/gamification/streaks'),
+  check: () => api.post('/gamification/check'),
+  getLevel: () => api.get('/gamification/level'),
+};
+
 // Progression
 export const progressionApi = {
   getHistory: (limit?: number) => api.get('/progression/history', { params: { limit } }),
   run: () => api.post('/progression/run'),
+  getInsights: (params?: { limit?: number; unreadOnly?: boolean }) =>
+    api.get('/progression/insights', { params }),
+  getUnreadCount: () => api.get('/progression/insights/unread-count'),
+  markRead: (id: string) => api.put(`/progression/insights/${id}/read`),
+  markAllRead: () => api.put('/progression/insights/read-all'),
 };

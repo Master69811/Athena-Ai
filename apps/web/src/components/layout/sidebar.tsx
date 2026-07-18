@@ -1,101 +1,169 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
-import {
-  LayoutDashboard, Dumbbell, Apple, TrendingUp, MessageCircle,
-  Trophy, Settings, Zap, ChevronRight, LogOut, User,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
-import { authApi } from '@/lib/api';
-import { useRouter } from 'next/navigation';
+import { authApi, progressionApi } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import { Modal } from '@/components/ui/modal';
+import { NAV_ICONS, isNavItemActive, type NavIconName } from './nav-items';
 
-const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/workout', icon: Dumbbell, label: 'Allenamento' },
-  { href: '/nutrition', icon: Apple, label: 'Nutrizione' },
-  { href: '/progress', icon: TrendingUp, label: 'Progressi' },
-  { href: '/coach', icon: MessageCircle, label: 'AI Coach' },
-  { href: '/achievements', icon: Trophy, label: 'Achievement' },
-  { href: '/settings', icon: Settings, label: 'Impostazioni' },
+const NAV: Array<{ href: string; label: string; icon: NavIconName; exact?: boolean }> = [
+  { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { href: '/workout/session', label: 'Sessione live', icon: 'session', exact: true },
+  { href: '/workout', label: 'Piano workout', icon: 'workout', exact: true },
+  { href: '/nutrition', label: 'Nutrizione', icon: 'nutrition' },
+  { href: '/recovery', label: 'Recupero', icon: 'recovery' },
+  { href: '/progress', label: 'Progress', icon: 'progress', exact: true },
+  { href: '/progress/analytics', label: 'Analytics', icon: 'analytics' },
+  { href: '/coach', label: 'AI Coach', icon: 'coach' },
+  { href: '/achievements', label: 'Achievement', icon: 'achievements' },
+  { href: '/settings', label: 'Impostazioni', icon: 'settings' },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuthStore();
   const router = useRouter();
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
-  const handleLogout = async () => {
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ['progression-unread-count'],
+    queryFn: async () => {
+      const res = await progressionApi.getUnreadCount() as any;
+      return res.data;
+    },
+    staleTime: 60_000,
+    enabled: !!user,
+  });
+
+  const confirmLogout = async () => {
+    setLogoutOpen(false);
     await authApi.logout().catch(() => {});
     logout();
     router.push('/login');
   };
 
+  const name = user?.profile?.name || user?.email || 'Utente';
+  const initials = name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+
   return (
-    <aside className="hidden lg:flex flex-col w-64 h-screen fixed left-0 top-0 bg-surface/95 backdrop-blur-xl border-r border-border z-40">
+    <aside
+      className="hidden lg:flex flex-col fixed left-0 top-0 h-screen z-40"
+      style={{
+        width: 248,
+        background: 'rgba(17,17,24,.7)',
+        backdropFilter: 'blur(20px)',
+        borderRight: '1px solid #1e1e2e',
+        padding: '22px 16px',
+      }}
+    >
       {/* Logo */}
-      <div className="p-6 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/30">
-          <Zap className="w-5 h-5 text-white" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '6px 8px 22px' }}>
+        <div
+          className="rounded-lg"
+          style={{
+            width: 34, height: 34,
+            background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 800, fontSize: 18, color: '#fff',
+          }}
+        >
+          A
         </div>
-        <div>
-          <h1 className="text-lg font-bold text-foreground">Athena AI</h1>
-          <p className="text-xs text-muted-foreground">Elite Coach</p>
-        </div>
+        <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-.4px', color: '#e7e7ee' }}>Athena</div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 pb-3">
-        <ul className="space-y-1">
-          {navItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
-            return (
-              <li key={item.href}>
-                <Link href={item.href}>
-                  <motion.div
-                    whileHover={{ x: 2 }}
-                    className={cn(
-                      'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
-                      isActive
-                        ? 'bg-primary/10 text-primary border border-primary/20'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                    )}
-                  >
-                    <item.icon className={cn('w-5 h-5', isActive && 'text-primary')} />
-                    <span>{item.label}</span>
-                    {isActive && <ChevronRight className="w-3.5 h-3.5 ml-auto text-primary" />}
-                  </motion.div>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+      <nav aria-label="Navigazione principale" style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
+        {NAV.map(({ href, label, icon, exact }) => {
+          const isActive = isNavItemActive(pathname, href, exact);
+          const Icon = NAV_ICONS[icon];
+          return (
+            <Link
+              key={href}
+              href={href}
+              style={{ textDecoration: 'none' }}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              <div
+                className={
+                  'relative flex items-center gap-[11px] px-3 py-[10px] rounded-xl text-[13.5px] font-semibold cursor-pointer transition-colors ' +
+                  (isActive ? 'text-foreground' : 'text-content-secondary hover:bg-surface-3 hover:text-foreground')
+                }
+                style={{ background: isActive ? 'hsl(var(--primary)/.12)' : undefined }}
+              >
+                {isActive && (
+                  <span
+                    className="absolute left-0 top-1/2 -translate-y-1/2 rounded-full"
+                    style={{ width: 3, height: 16, background: 'hsl(var(--primary))' }}
+                    aria-hidden="true"
+                  />
+                )}
+                <Icon size={19} strokeWidth={2} />
+                <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
+                {href === '/progress' && !isActive && (unreadData?.count ?? 0) > 0 && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, color: '#fff',
+                    background: '#6366f1', padding: '1px 6px', borderRadius: 20,
+                  }}>
+                    {(unreadData?.count ?? 0) > 9 ? '9+' : unreadData?.count}
+                  </span>
+                )}
+              </div>
+            </Link>
+          );
+        })}
       </nav>
 
-      {/* User */}
-      <div className="p-4 border-t border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0">
-            <User className="w-4 h-4 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">
-              {user?.profile?.name || user?.email}
-            </p>
-            <p className="text-xs text-muted-foreground capitalize">
-              {user?.subscriptionTier?.toLowerCase() || 'free'} plan
-            </p>
-          </div>
+      {/* User card */}
+      <div className="card-inner" style={{ marginTop: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button
-            onClick={handleLogout}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+            type="button"
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+            style={{
+              width: 36, height: 36, borderRadius: 10, border: 'none',
+              background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 700, fontSize: 15, color: '#fff',
+              cursor: 'pointer', flexShrink: 0,
+            }}
+            onClick={() => setLogoutOpen(true)}
+            title="Esci"
+            aria-label="Esci dall'account"
           >
-            <LogOut className="w-4 h-4" />
+            {initials}
           </button>
+          <div style={{ minWidth: 0 }}>
+            <div style={{
+              fontSize: 13, fontWeight: 600, color: '#e7e7ee',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {name}
+            </div>
+            <div style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600 }}>
+              {user?.subscriptionTier === 'PRO' ? 'PRO · attivo' : 'FREE · attivo'}
+            </div>
+          </div>
         </div>
       </div>
+
+      <Modal open={logoutOpen} onClose={() => setLogoutOpen(false)} title="Vuoi uscire dall'account?">
+        <div className="flex gap-3 pt-1">
+          <button type="button" className="btn-secondary flex-1 h-10 rounded-xl text-sm" onClick={() => setLogoutOpen(false)}>
+            Annulla
+          </button>
+          <button
+            type="button"
+            className="flex-1 h-10 rounded-xl text-sm font-semibold bg-destructive text-destructive-foreground hover:opacity-90 transition-opacity"
+            onClick={confirmLogout}
+          >
+            Esci
+          </button>
+        </div>
+      </Modal>
     </aside>
   );
 }

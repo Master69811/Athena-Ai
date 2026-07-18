@@ -27,7 +27,10 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [shaking, setShaking] = useState(false);
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
+
+  const shake = () => { setShaking(true); setTimeout(() => setShaking(false), 400); };
 
   const onSubmit = async (data: FormData) => {
     setLoading(true);
@@ -53,45 +56,45 @@ export default function RegisterPage() {
       
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md relative">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-primary/40">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-4">
             <Zap className="w-7 h-7 text-white" />
           </div>
           <h1 className="text-3xl font-bold gradient-text mb-1">Athena AI</h1>
           <p className="text-muted-foreground">Inizia il tuo percorso con il coach AI più avanzato</p>
         </div>
 
-        <div className="glass-card-elevated p-8">
+        <div className="card p-8">
           <h2 className="text-xl font-bold mb-6">Crea il tuo account</h2>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit, shake)} className={`space-y-4 ${shaking ? 'animate-shake' : ''}`}>
             <div>
-              <label className="block text-sm font-medium mb-1.5">Nome</label>
+              <label htmlFor="register-name" className="block text-sm font-medium mb-1.5">Nome</label>
               <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input {...register('name')} className="input-field pl-10" placeholder="Mario Rossi" />
+                <User className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 ${errors.name ? 'text-destructive/70' : 'text-muted-foreground'}`} />
+                <input id="register-name" {...register('name')} autoComplete="name" className={`input-field pl-10 ${errors.name ? 'input-error' : ''}`} placeholder="Mario Rossi" aria-invalid={!!errors.name} aria-describedby={errors.name ? 'name-error' : undefined} />
               </div>
-              {errors.name && <p className="text-xs text-destructive mt-1">{errors.name.message}</p>}
+              {errors.name && <p id="name-error" role="alert" className="text-xs text-destructive mt-1">{errors.name.message}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1.5">Email</label>
+              <label htmlFor="register-email" className="block text-sm font-medium mb-1.5">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input {...register('email')} type="email" className="input-field pl-10" placeholder="tu@email.com" />
+                <Mail className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 ${errors.email ? 'text-destructive/70' : 'text-muted-foreground'}`} />
+                <input id="register-email" {...register('email')} type="email" autoComplete="email" className={`input-field pl-10 ${errors.email ? 'input-error' : ''}`} placeholder="tu@email.com" aria-invalid={!!errors.email} aria-describedby={errors.email ? 'email-error' : undefined} />
               </div>
-              {errors.email && <p className="text-xs text-destructive mt-1">{errors.email.message}</p>}
+              {errors.email && <p id="email-error" role="alert" className="text-xs text-destructive mt-1">{errors.email.message}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1.5">Password</label>
+              <label htmlFor="register-password" className="block text-sm font-medium mb-1.5">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input {...register('password')} type={showPassword ? 'text' : 'password'} className="input-field pl-10 pr-10" placeholder="••••••••" />
-                <button type="button" onClick={() => setShowPassword(s => !s)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <Lock className={`absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 ${errors.password ? 'text-destructive/70' : 'text-muted-foreground'}`} />
+                <input id="register-password" {...register('password')} type={showPassword ? 'text' : 'password'} autoComplete="new-password" className={`input-field pl-10 pr-10 ${errors.password ? 'input-error' : ''}`} placeholder="••••••••" aria-invalid={!!errors.password} aria-describedby={errors.password ? 'password-error' : undefined} />
+                <button type="button" onClick={() => setShowPassword(s => !s)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showPassword ? 'Nascondi password' : 'Mostra password'}>
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              {errors.password && <p className="text-xs text-destructive mt-1">{errors.password.message}</p>}
+              {errors.password && <p id="password-error" role="alert" className="text-xs text-destructive mt-1">{errors.password.message}</p>}
             </div>
 
             <Button type="submit" variant="gradient" size="lg" className="w-full mt-2" loading={loading}>

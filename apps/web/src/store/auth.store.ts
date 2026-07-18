@@ -14,6 +14,12 @@ interface AuthStore {
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
+  // False until zustand-persist has rehydrated from localStorage. Route
+  // guards MUST wait for this before acting, otherwise the first client
+  // render (initial state, isAuthenticated:false) would bounce a genuinely
+  // logged-in user out before their persisted state loads.
+  hasHydrated: boolean;
+  setHasHydrated: (v: boolean) => void;
   setAuth: (user: User, accessToken: string, refreshToken: string) => void;
   setUser: (user: User) => void;
   logout: () => void;
@@ -26,11 +32,23 @@ export const useAuthStore = create<AuthStore>()(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
-      setAuth: (user, accessToken, refreshToken) =>
-        set({ user, accessToken, refreshToken, isAuthenticated: true }),
+      hasHydrated: false,
+      setHasHydrated: (v) => set({ hasHydrated: v }),
+      setAuth: (user, accessToken, refreshToken) => {
+        if (typeof document !== 'undefined') {
+          // 7 days — must match JWT_REFRESH_EXPIRES_IN so the route gate
+          // does not log the user out while their refresh token is still valid.
+          document.cookie = 'athena_session=1; path=/; max-age=604800; SameSite=Strict';
+        }
+        set({ user, accessToken, refreshToken, isAuthenticated: true });
+      },
       setUser: (user) => set({ user }),
-      logout: () =>
-        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false }),
+      logout: () => {
+        if (typeof document !== 'undefined') {
+          document.cookie = 'athena_session=; path=/; max-age=0';
+        }
+        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false });
+      },
     }),
     {
       name: 'athena-auth',
@@ -40,6 +58,9 @@ export const useAuthStore = create<AuthStore>()(
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     },
   ),
 );

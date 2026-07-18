@@ -1,33 +1,97 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { usersApi, workoutApi, recoveryApi, nutritionApi } from '@/lib/api';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { useState, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { TrendingUp, Moon, Dumbbell } from 'lucide-react';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, ResponsiveContainer,
-  RadialBarChart, RadialBar, PieChart, Pie, Cell, Tooltip,
-} from 'recharts';
-import { Flame, Dumbbell, TrendingUp, Zap, ChevronRight, Brain, Activity } from 'lucide-react';
-import Link from 'next/link';
-import { getRecoveryColor, getRecoveryLabel, formatWeight } from '@/lib/utils';
+  usersApi, workoutApi, recoveryApi, nutritionApi,
+  progressionApi, bodyWeightApi, nutritionEngineApi,
+} from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
+import { RecoveryModal } from '@/components/recovery/RecoveryModal';
+import { RecoveryRingPro, MacroBar } from '@/components/dashboard/DashboardSvgComponents';
+import { toast } from 'sonner';
+import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts';
 
-const fadeInUp = {
-  initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.4 },
+/* ─── Types ─── */
+type ReadinessAdaptation = {
+  intensity: 'full' | 'moderate' | 'reduced' | 'rest';
+  setMultiplier: number;
+  rpeAdjustment: number;
+  titleIt: string;
+  detailIt: string;
+  color: 'green' | 'yellow' | 'orange' | 'red';
+};
+type Readiness = {
+  hasData: boolean;
+  score: number;
+  engineAction: string;
+  adaptation: ReadinessAdaptation;
+  summary: string;
 };
 
-const stagger = {
-  animate: { transition: { staggerChildren: 0.08 } },
-};
+const READINESS_COLOR = { green: 'hsl(var(--success))', yellow: '#eab308', orange: '#f97316', red: '#ef4444' };
 
+/* ─── Count-up hook ─── */
+function useCountUp(target: number, duration = 1200) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    const t0 = performance.now();
+    const step = (t: number) => {
+      const p = Math.min(1, (t - t0) / duration);
+      const ease = 1 - Math.pow(1 - p, 3);
+      setVal(Math.round(target * ease));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    const id = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(id);
+  }, [target, duration]);
+  return val;
+}
+
+/* ─── Dashboard Skeleton ─── */
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`animate-pulse bg-surface-3 rounded-2xl ${className}`} />;
+}
+
+function DashboardSkeleton() {
+  return (
+    <div style={{ maxWidth: 1180, animation: 'fadeUp .4s ease' }}>
+      <div style={{ display: 'flex', gap: 24, marginBottom: 22 }}>
+        <div style={{ flex: 1 }}>
+          <Skeleton className="h-9 w-64 mb-2" />
+          <Skeleton className="h-4 w-48 mb-4" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          {[0,1,2,3].map(i => <Skeleton key={i} className="w-28 h-24 rounded-2xl" />)}
+        </div>
+      </div>
+      <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <Skeleton className="h-56 rounded-2xl" />
+          <Skeleton className="h-44 rounded-2xl" />
+          <Skeleton className="h-44 rounded-2xl" />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <Skeleton className="h-72 rounded-2xl" />
+          <Skeleton className="h-28 rounded-2xl" />
+          <Skeleton className="h-44 rounded-2xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main component ─── */
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
 
-  const { data: dashboard } = useQuery({
+  const { data: dashboard, isLoading: dashboardLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: usersApi.getDashboard,
     select: (res: any) => res.data,
@@ -37,6 +101,12 @@ export default function DashboardPage() {
     queryKey: ['recovery-latest'],
     queryFn: recoveryApi.getLatest,
     select: (res: any) => res.data,
+  });
+
+  const { data: readiness } = useQuery<Readiness | null>({
+    queryKey: ['recovery-readiness'],
+    queryFn: async () => (await recoveryApi.getReadiness() as any) ?? null,
+    staleTime: 5 * 60_000,
   });
 
   const { data: activePlan } = useQuery({
@@ -51,247 +121,367 @@ export default function DashboardPage() {
     select: (res: any) => res.data,
   });
 
-  const recoveryScore = recovery?.score || 75;
-  const recoveryColor = getRecoveryColor(recoveryScore);
+  const { data: nutritionPlan } = useQuery({
+    queryKey: ['nutrition-plan'],
+    queryFn: nutritionApi.getPlan,
+    select: (res: any) => res.data,
+  });
 
-  const macroData = todayNutrition?.totals
-    ? [
-        { name: 'Proteine', value: todayNutrition.totals.protein.consumed, target: todayNutrition.totals.protein.target, color: '#6366f1' },
-        { name: 'Carboidrati', value: todayNutrition.totals.carbs.consumed, target: todayNutrition.totals.carbs.target, color: '#8b5cf6' },
-        { name: 'Grassi', value: todayNutrition.totals.fat.consumed, target: todayNutrition.totals.fat.target, color: '#06b6d4' },
-      ]
-    : [];
+  const { data: latestInsights } = useQuery({
+    queryKey: ['progression-insights-dashboard'],
+    queryFn: async () => {
+      const res = await progressionApi.getInsights({ limit: 3, unreadOnly: false }) as any;
+      return res.data;
+    },
+    staleTime: 60_000,
+  });
+
+  const { data: weightSnapshot } = useQuery({
+    queryKey: ['weight-snapshot'],
+    queryFn: async () => {
+      const res = await bodyWeightApi.getSnapshot() as any;
+      return res.data as { ma7d: number; ma14d: number; weeklyRateKg: number } | null;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: nutritionDecisions } = useQuery({
+    queryKey: ['nutrition-decisions-dashboard'],
+    queryFn: async () => {
+      const res = await nutritionEngineApi.getDecisions({ limit: 3, unreadOnly: false }) as any;
+      return res.data as Array<{ id: string; type: string; deltaCalories: number; rationale: string }>;
+    },
+    staleTime: 60_000,
+  });
+
+  const applyDecisionMutation = useMutation({
+    mutationFn: (id: string) => nutritionEngineApi.applyDecision(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nutrition-decisions-dashboard'] });
+      toast.success('Decisione applicata!');
+    },
+    onError: () => toast.error('Errore nell\'applicare la decisione'),
+  });
+
+  const hasRecoveryData = recovery?.score != null;
+  const recoveryScore = recovery?.score ?? 0;
+  const recoveryDisplay = useCountUp(recoveryScore);
+
+  const greeting = (() => {
+    const h = new Date().getHours();
+    if (h < 12) return 'Buongiorno';
+    if (h < 18) return 'Buon pomeriggio';
+    return 'Buona sera';
+  })();
+  const userName = user?.profile?.name?.split(' ')[0] || 'Atleta';
+
+  const recoveryStatusColor = readiness?.hasData
+    ? READINESS_COLOR[readiness.adaptation.color]
+    : recoveryScore >= 80 ? 'hsl(var(--success))' : recoveryScore >= 60 ? '#eab308' : '#ef4444';
+
+  const recoveryTitle = readiness?.hasData ? readiness.adaptation.titleIt
+    : recoveryScore >= 80 ? 'Pronto a spingere' : recoveryScore >= 60 ? 'Allenamento moderato' : 'Recupero necessario';
+
+  const recoveryDetail = readiness?.hasData ? readiness.adaptation.detailIt
+    : 'Sonno e HRV in linea. Athena consiglia un carico pieno sull\'allenamento di forza di oggi.';
+
+  const cal = todayNutrition?.totals;
+  const kcalConsumed = (cal?.protein?.consumed ?? 0) * 4 + (cal?.carbs?.consumed ?? 0) * 4 + (cal?.fat?.consumed ?? 0) * 9;
+  const kcalTarget = nutritionPlan?.dailyCalories ?? null;
+  const hasMacroTargets = cal != null || nutritionPlan != null;
+
+  const protTarget = cal?.protein?.target ?? nutritionPlan?.proteinG ?? 0;
+  const carbTarget = cal?.carbs?.target ?? nutritionPlan?.carbsG ?? 0;
+  const fatTarget = cal?.fat?.target ?? nutritionPlan?.fatG ?? 0;
+
+  const protPct = protTarget ? (cal?.protein?.consumed ?? 0) / protTarget : 0;
+  const carbPct = carbTarget ? (cal?.carbs?.consumed ?? 0) / carbTarget : 0;
+  const fatPct  = fatTarget ? (cal?.fat?.consumed ?? 0) / fatTarget : 0;
+
+  const protLabel = hasMacroTargets ? `${cal?.protein?.consumed ?? 0} / ${protTarget || '—'} g` : '—';
+  const carbLabel = hasMacroTargets ? `${cal?.carbs?.consumed ?? 0} / ${carbTarget || '—'} g` : '—';
+  const fatLabel  = hasMacroTargets ? `${cal?.fat?.consumed ?? 0} / ${fatTarget || '—'} g` : '—';
+
+  // The plan endpoint only returns `days` (no server-computed "next workout"),
+  // so derive today's session the same way apps/web/.../workout/page.tsx does.
+  const todayDayIndex = new Date().getDay();
+  const nextWorkoutDay = activePlan?.days?.find((d: any) => d.dayIndex === todayDayIndex) ?? activePlan?.days?.[0];
+  const exercises = nextWorkoutDay?.exercises?.slice(0, 4) ?? [];
+
+  const weekSessions = dashboard?.workoutsThisWeek ?? 0;
+  const weekVolume = dashboard?.totalVolumeThisWeek
+    ? (dashboard.totalVolumeThisWeek / 1000).toFixed(1)
+    : null;
+
+  const decisions = (nutritionDecisions ?? []).slice(0, 3).map((d, i) => {
+    const icons = [TrendingUp, Moon, Dumbbell];
+    return {
+      icon: icons[i % icons.length],
+      title: d.type === 'CALORIE_INCREASE' ? `Calorie · +${d.deltaCalories} kcal`
+        : d.type === 'CALORIE_DECREASE' ? `Calorie · ${d.deltaCalories} kcal`
+        : 'Nutrizione · Mantenimento',
+      body: d.rationale,
+    };
+  });
+
+  const weightChartData = (dashboard?.weightTrend ?? []).map((p: { date: string; weight: number }, i: number) => ({ x: i, v: p.weight }));
+
+  if (dashboardLoading) return <DashboardSkeleton />;
 
   return (
-    <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-6 max-w-7xl mx-auto">
-      
-      {/* Welcome + AI Insight */}
-      <motion.div variants={fadeInUp}>
-        <Card glow className="bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center flex-shrink-0 shadow-lg shadow-primary/30">
-              <Brain className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs text-primary font-medium mb-1">ATHENA AI — INSIGHT DEL GIORNO</p>
-              <p className="text-sm text-foreground leading-relaxed">
-                {dashboard?.aiInsightOfTheDay || 'Caricamento insight personalizzato...'}
-              </p>
+    <div style={{ maxWidth: 1180, animation: 'fadeUp .4s ease' }}>
+
+      {/* ── Hero band ── */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 24, marginBottom: 22, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <div className="text-display">
+            {greeting}, {userName}
+          </div>
+          <div style={{ fontSize: 14, color: 'hsl(var(--content-secondary))', marginTop: 6 }}>
+            {dashboard?.aiInsightOfTheDay || 'Sei al massimo della forma — è il momento di spingere.'}
+          </div>
+        </div>
+
+        {/* Recovery score pill — the only "vital" the backend actually provides */}
+        {hasRecoveryData && (
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div className="card card-interactive" style={{ padding: '14px 16px', minWidth: 112, cursor: 'default' }}>
+              <div style={{ fontSize: 10.5, color: 'hsl(var(--content-tertiary))', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.1em' }}>Recovery</div>
+              <div style={{ margin: '7px 0 9px', letterSpacing: '-.5px' }}>
+                <span className="tabular-nums" style={{ fontSize: 23, fontWeight: 700, color: 'hsl(var(--foreground))' }}>{recoveryScore}</span>
+                <span style={{ fontSize: 12, color: 'hsl(var(--content-tertiary))', fontWeight: 600 }}> / 100</span>
+              </div>
             </div>
           </div>
-        </Card>
-      </motion.div>
-
-      {/* KPI Grid */}
-      <motion.div variants={fadeInUp} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          icon={<Dumbbell className="w-5 h-5" />}
-          label="Allenamenti"
-          value={dashboard?.workoutsThisWeek || 0}
-          suffix="questa settimana"
-          color="primary"
-        />
-        <MetricCard
-          icon={<Flame className="w-5 h-5" />}
-          label="Volume Totale"
-          value={dashboard?.totalVolumeThisWeek ? `${(dashboard.totalVolumeThisWeek / 1000).toFixed(1)}t` : '0t'}
-          suffix="questa settimana"
-          color="accent"
-        />
-        <MetricCard
-          icon={<TrendingUp className="w-5 h-5" />}
-          label="Streak"
-          value={dashboard?.currentStreak || 0}
-          suffix="giorni consecutivi"
-          color="success"
-        />
-        <MetricCard
-          icon={<Activity className="w-5 h-5" />}
-          label="Recovery"
-          value={`${recoveryScore}%`}
-          suffix={getRecoveryLabel(recoveryScore)}
-          color={recoveryScore >= 70 ? 'success' : recoveryScore >= 50 ? 'primary' : 'warning'}
-        />
-      </motion.div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Weight Trend Chart */}
-        <motion.div variants={fadeInUp} className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Andamento Peso</CardTitle>
-            </CardHeader>
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dashboard?.weightTrend || []}>
-                  <defs>
-                    <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(239,84%,67%)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(239,84%,67%)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'hsl(240 5% 55%)' }} tickLine={false} axisLine={false} tickFormatter={v => v.slice(5)} />
-                  <YAxis tick={{ fontSize: 11, fill: 'hsl(240 5% 55%)' }} tickLine={false} axisLine={false} domain={['dataMin - 1', 'dataMax + 1']} />
-                  <Tooltip
-                    contentStyle={{ background: 'hsl(240 10% 10%)', border: '1px solid hsl(240 8% 14%)', borderRadius: '12px', color: 'hsl(0 0% 98%)' }}
-                    formatter={(v: any) => [`${v} kg`, 'Peso']}
-                  />
-                  <Area type="monotone" dataKey="weight" stroke="hsl(239,84%,67%)" strokeWidth={2} fill="url(#weightGrad)" dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-        </motion.div>
-
-        {/* Recovery Score Ring */}
-        <motion.div variants={fadeInUp}>
-          <Card className="flex flex-col items-center justify-center gap-3 py-6">
-            <p className="text-sm text-muted-foreground font-medium">Recovery Score</p>
-            <div className="relative">
-              <svg width="120" height="120" viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r="50" fill="none" stroke="hsl(240 8% 14%)" strokeWidth="10" />
-                <circle
-                  cx="60" cy="60" r="50"
-                  fill="none"
-                  stroke={recoveryColor}
-                  strokeWidth="10"
-                  strokeLinecap="round"
-                  strokeDasharray={`${2 * Math.PI * 50}`}
-                  strokeDashoffset={`${2 * Math.PI * 50 * (1 - recoveryScore / 100)}`}
-                  transform="rotate(-90 60 60)"
-                  style={{ transition: 'stroke-dashoffset 1s ease-in-out', filter: `drop-shadow(0 0 8px ${recoveryColor}60)` }}
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-bold" style={{ color: recoveryColor }}>{recoveryScore}</span>
-                <span className="text-xs text-muted-foreground">/ 100</span>
-              </div>
-            </div>
-            <p className="text-sm font-medium" style={{ color: recoveryColor }}>
-              {getRecoveryLabel(recoveryScore)}
-            </p>
-            <p className="text-xs text-muted-foreground text-center px-4 leading-relaxed">
-              {recovery?.recommendation || 'Registra il tuo recupero giornaliero'}
-            </p>
-          </Card>
-        </motion.div>
+        )}
       </div>
 
-      {/* Today's Nutrition + Next Workout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Macros */}
-        {todayNutrition && (
-          <motion.div variants={fadeInUp}>
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Nutrizione Oggi</CardTitle>
-                  <Link href="/nutrition" className="text-xs text-primary hover:underline">Dettagli →</Link>
-                </div>
-              </CardHeader>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-2xl font-bold">{Math.round(todayNutrition.totals.calories.consumed)}</span>
-                  <span className="text-sm text-muted-foreground">/ {todayNutrition.totals.calories.target} kcal</span>
-                </div>
-                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-700"
-                    style={{ width: `${Math.min(100, (todayNutrition.totals.calories.consumed / todayNutrition.totals.calories.target) * 100)}%` }}
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-3 mt-2">
-                  {macroData.map(macro => (
-                    <div key={macro.name} className="text-center">
-                      <div className="text-lg font-bold" style={{ color: macro.color }}>{macro.value}g</div>
-                      <div className="text-xs text-muted-foreground">{macro.name}</div>
-                      <div className="text-xs text-muted-foreground">/ {macro.target}g</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Card>
-          </motion.div>
-        )}
+      {/* ── Two-column grid ── */}
+      <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1.05fr 1fr', gap: 20 }}>
 
-        {/* Next Workout */}
-        <motion.div variants={fadeInUp}>
-          <Card className="flex flex-col gap-4">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Prossimo Allenamento</CardTitle>
-                <Link href="/workout" className="text-xs text-primary hover:underline">Piano →</Link>
-              </div>
-            </CardHeader>
-            {activePlan?.days?.[0] ? (
-              <>
-                <div>
-                  <p className="font-semibold text-foreground">{activePlan.days[0].name}</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {activePlan.days[0].exercises?.length || 0} esercizi · {activePlan.name}
-                  </p>
+        {/* ──── Left column ──── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Recovery card */}
+          <div className="card card-interactive">
+            <div className="label-caps" style={{ marginBottom: 18 }}>Recovery di oggi</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 26 }}>
+              <div style={{ position: 'relative', width: 170, height: 170, flexShrink: 0 }}>
+                <RecoveryRingPro score={recoveryScore} />
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <div className="tabular-nums" style={{ fontSize: 46, fontWeight: 700, lineHeight: 1, letterSpacing: -1, color: 'hsl(var(--foreground))' }}>{recoveryDisplay}</div>
+                  <div style={{ fontSize: 11, color: 'hsl(var(--content-tertiary))', fontWeight: 600, marginTop: 2 }}>/ 100</div>
                 </div>
-                <div className="space-y-2">
-                  {activePlan.days[0].exercises?.slice(0, 3).map((ex: any, i: number) => (
-                    <div key={i} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/50">
-                      <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-bold text-primary">{i + 1}</span>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: recoveryStatusColor, marginBottom: 6 }}>{recoveryTitle}</div>
+                <div style={{ fontSize: 13.5, color: 'hsl(var(--content-secondary))', lineHeight: 1.55, marginBottom: 16 }}>{recoveryDetail}</div>
+                {readiness?.hasData && readiness.adaptation.intensity !== 'full' && (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                    <span style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, background: 'hsl(var(--border))', color: 'hsl(var(--foreground))', fontWeight: 600 }}>
+                      Volume {Math.round(readiness.adaptation.setMultiplier * 100)}%
+                    </span>
+                    {readiness.adaptation.rpeAdjustment !== 0 && (
+                      <span style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, background: 'hsl(var(--border))', color: 'hsl(var(--foreground))', fontWeight: 600 }}>
+                        RPE {readiness.adaptation.rpeAdjustment > 0 ? '+' : ''}{readiness.adaptation.rpeAdjustment}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={() => setRecoveryOpen(true)}
+                  className="btn-secondary"
+                  style={{
+                    padding: '10px 16px', borderRadius: 12, fontSize: 13,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  Registra recupero
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Macro card */}
+          <div className="card card-interactive">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              <div className="label-caps">Macro di oggi</div>
+              <div style={{ fontSize: 12, color: 'hsl(var(--content-secondary))' }}>
+                <b style={{ color: 'hsl(var(--foreground))' }}>{Math.round(kcalConsumed)}</b> / {kcalTarget ?? '—'} kcal
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {[
+                { name: 'Proteine', label: protLabel, pct: protPct, color: 'hsl(var(--primary))' },
+                { name: 'Carboidrati', label: carbLabel, pct: carbPct, color: 'hsl(var(--success))' },
+                { name: 'Grassi', label: fatLabel, pct: fatPct, color: 'hsl(var(--warning))' },
+              ].map(m => (
+                <div key={m.name}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 7 }}>
+                    <span style={{ fontWeight: 600, color: 'hsl(var(--foreground))' }}>{m.name}</span>
+                    <span style={{ color: 'hsl(var(--content-secondary))' }}>{m.label}</span>
+                  </div>
+                  <MacroBar pct={m.pct * 100} color={m.color} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Decisioni di Athena */}
+          <div className="card card-interactive">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 16 }}>
+              <div className="rounded-lg" style={{
+                width: 24, height: 24,
+                background: 'linear-gradient(135deg,#6366f1,hsl(var(--accent)))',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 700, color: '#fff',
+              }}>A</div>
+              <div className="label-caps">Decisioni di Athena</div>
+            </div>
+            {decisions.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+                {decisions.map((d, i) => {
+                  const Icon = d.icon;
+                  return (
+                    <div key={i} style={{
+                      display: 'flex', gap: 13, padding: 14, borderRadius: 12,
+                      background: 'hsl(var(--surface-elevated))', border: '1px solid hsl(var(--border))',
+                    }}>
+                      <div className="rounded-lg bg-primary/10 text-primary" style={{
+                        width: 32, height: 32, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <Icon size={16} />
                       </div>
-                      <div>
-                        <p className="text-sm font-medium">{ex.exercise?.name || 'Esercizio'}</p>
-                        <p className="text-xs text-muted-foreground">{ex.sets} serie · {ex.repsMin}-{ex.repsMax} rip</p>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2, color: 'hsl(var(--foreground))' }}>{d.title}</div>
+                        <div style={{ fontSize: 12.5, color: 'hsl(var(--content-secondary))', lineHeight: 1.5 }}>{d.body}</div>
                       </div>
                     </div>
-                  ))}
-                </div>
-                <Link href="/workout/session">
-                  <Button variant="gradient" className="w-full">
-                    <Zap className="w-4 h-4" />
-                    Inizia Allenamento
-                  </Button>
-                </Link>
-              </>
+                  );
+                })}
+              </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center gap-3 py-4">
-                <p className="text-sm text-muted-foreground text-center">
-                  Nessun programma attivo. Genera il tuo piano con AI!
-                </p>
-                <Link href="/workout">
-                  <Button variant="outline">Crea Piano AI</Button>
-                </Link>
+              <div style={{ fontSize: 13, color: 'hsl(var(--content-tertiary))', padding: '8px 2px' }}>
+                Nessuna decisione disponibile al momento.
               </div>
             )}
-          </Card>
-        </motion.div>
-      </div>
-    </motion.div>
-  );
-}
+          </div>
+        </div>
 
-function MetricCard({ icon, label, value, suffix, color }: {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number;
-  suffix: string;
-  color: 'primary' | 'accent' | 'success' | 'warning';
-}) {
-  const colors = {
-    primary: 'text-primary bg-primary/10',
-    accent: 'text-accent bg-accent/10',
-    success: 'text-[hsl(var(--success))] bg-[hsl(var(--success)/0.1)]',
-    warning: 'text-[hsl(var(--warning))] bg-[hsl(var(--warning)/0.1)]',
-  };
+        {/* ──── Right column ──── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-  return (
-    <Card className="hover:border-primary/20 transition-colors">
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${colors[color]}`}>
-        {icon}
+          {/* Prossimo allenamento */}
+          <div className="card card-interactive border-primary/25">
+            <div className="label-caps" style={{ marginBottom: 14 }}>Prossimo allenamento</div>
+            <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-.5px', marginBottom: 4, color: 'hsl(var(--foreground))' }}>
+              {nextWorkoutDay?.name || 'Nessun allenamento programmato'}
+            </div>
+            <div style={{ fontSize: 13, color: 'hsl(var(--content-secondary))', marginBottom: 16 }}>
+              {nextWorkoutDay?.muscleGroups?.join(', ') || (activePlan ? 'Giorno di riposo' : 'Nessun piano attivo')}
+            </div>
+            {exercises.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 20 }}>
+                {exercises.map((e: any, i: number) => (
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '11px 14px', background: 'rgba(255,255,255,.025)',
+                    border: '1px solid hsl(var(--border))', borderRadius: 12,
+                  }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+                      {e.exercise?.nameIt || e.exercise?.name}
+                    </span>
+                    <span style={{ fontSize: 12.5, color: 'hsl(var(--content-secondary))' }}>
+                      {e.sets}×{e.repsMin === e.repsMax ? e.repsMin : `${e.repsMin}-${e.repsMax}`}{e.rpeTarget ? ` · RPE ${e.rpeTarget}` : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: 'hsl(var(--content-tertiary))', marginBottom: 20 }}>
+                {activePlan ? 'Riposo oggi — nessun esercizio programmato.' : 'Crea un piano di allenamento per iniziare.'}
+              </div>
+            )}
+            <button
+              onClick={() => router.push('/workout/session')}
+              className="btn-hero"
+              style={{
+                width: '100%', padding: 14, border: 'none', borderRadius: 12,
+                fontSize: 14.5, fontWeight: 700,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              Inizia sessione →
+            </button>
+          </div>
+
+          {/* Volume + Sessioni */}
+          <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div className="card card-interactive" style={{ padding: 20 }}>
+              <div className="label-caps" style={{ marginBottom: 10 }}>Volume settimana</div>
+              <div className="tabular-nums" style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, color: 'hsl(var(--foreground))' }}>
+                {weekVolume ?? '—'}<span style={{ fontSize: 15, color: 'hsl(var(--content-tertiary))', fontWeight: 600 }}> t</span>
+              </div>
+            </div>
+            <div className="card card-interactive" style={{ padding: 20 }}>
+              <div className="label-caps" style={{ marginBottom: 10 }}>Sessioni</div>
+              <div className="tabular-nums" style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, color: 'hsl(var(--foreground))' }}>
+                {weekSessions}<span style={{ fontSize: 15, color: 'hsl(var(--content-tertiary))', fontWeight: 600 }}> / 5</span>
+              </div>
+              <div style={{ fontSize: 12, color: 'hsl(var(--content-secondary))', fontWeight: 500, margin: '4px 0 14px' }}>questa settimana</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[0,1,2,3,4].map(i => (
+                  <div key={i} style={{
+                    flex: 1, height: 8, borderRadius: 4,
+                    background: i < weekSessions ? 'hsl(var(--success))' : 'hsl(var(--surface-3))',
+                  }} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Trend peso */}
+          <div className="card card-interactive" style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
+              <div className="label-caps">Trend peso · 8 settimane</div>
+              {weightSnapshot && (
+                <div style={{ marginLeft: 'auto', fontSize: 13, color: 'hsl(var(--success))', fontWeight: 700 }}>
+                  {weightSnapshot.weeklyRateKg < 0 ? `${weightSnapshot.weeklyRateKg.toFixed(1)} kg/sett.` : `+${weightSnapshot.weeklyRateKg.toFixed(1)} kg/sett.`}
+                </div>
+              )}
+            </div>
+            {weightChartData.length > 1 ? (
+              <ResponsiveContainer width="100%" height={120}>
+                <AreaChart data={weightChartData}>
+                  <defs>
+                    <linearGradient id="weightGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--accent))" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="hsl(var(--accent))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <Area type="monotone" dataKey="v" stroke="hsl(var(--accent))" strokeWidth={2.5} fill="url(#weightGrad)" dot={false} />
+                  <Tooltip
+                    contentStyle={{ background: 'hsl(var(--surface-elevated))', border: '1px solid hsl(var(--border))', borderRadius: 10, fontSize: 12 }}
+                    formatter={(v: any) => [`${v} kg`, 'Peso']}
+                    labelFormatter={() => ''}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'hsl(var(--content-tertiary))' }}>
+                Registra il tuo peso per vedere il trend.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-      <p className="text-2xl font-bold text-foreground">{value}</p>
-      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-      <p className="text-xs text-muted-foreground">{suffix}</p>
-    </Card>
+
+      <RecoveryModal open={recoveryOpen} onClose={() => {
+        setRecoveryOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['recovery-latest'] });
+        queryClient.invalidateQueries({ queryKey: ['recovery-readiness'] });
+      }} />
+    </div>
   );
 }

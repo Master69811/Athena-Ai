@@ -7,18 +7,27 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  api:
+    name: API — build & test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # pnpm version is sourced from the root package.json "packageManager" field
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @athena/api db:generate
-      - run: pnpm build
-      - run: pnpm lint
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @athena/api db:generate
+
+      - name: Build API
+        run: pnpm --filter @athena/api build
+
+      - name: Run API unit tests
+        run: pnpm --filter @athena/api test

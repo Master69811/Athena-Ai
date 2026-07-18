@@ -40,3 +40,5 @@ coverage
 # Misc
 *.tgz
 .cache
+apps/web/tsconfig.tsbuildinfo
+apps/web/next-env.d.ts

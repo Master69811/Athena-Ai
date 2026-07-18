@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { exercisesApi } from '@/lib/api';
 import { Card } from '@/components/ui/card';
@@ -9,11 +9,17 @@ import { getMuscleGroupLabel } from '@/lib/utils';
 
 export default function ExercisesPage() {
   const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
   const [muscleGroup, setMuscleGroup] = useState('');
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['exercises', search, muscleGroup],
-    queryFn: () => exercisesApi.getAll({ search, muscleGroup, limit: 30 }),
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['exercises', debounced, muscleGroup],
+    queryFn: () => exercisesApi.getAll({ search: debounced, muscleGroup, limit: 30 }),
     select: (res: any) => res.data,
     enabled: true,
   });
@@ -44,6 +50,16 @@ export default function ExercisesPage() {
 
       {isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+      ) : isError ? (
+        <div className="flex flex-col items-center gap-3 py-12 text-center">
+          <p className="text-muted-foreground">Impossibile caricare i dati, riprova</p>
+          <button
+            onClick={() => refetch()}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            Riprova
+          </button>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {data?.exercises?.map((ex: any) => (

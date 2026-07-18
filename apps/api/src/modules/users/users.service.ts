@@ -2,6 +2,13 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateProfileDto, CompleteOnboardingDto } from './dto/update-profile.dto';
 
+/** Truncate to local midnight so repeated same-day submissions collide on the (userId, date) unique constraint instead of creating duplicate rows. */
+function startOfDay(input?: Date | string): Date {
+  const d = input ? new Date(input) : new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
@@ -40,14 +47,26 @@ export class UsersService {
   }
 
   async completeOnboarding(userId: string, dto: CompleteOnboardingDto) {
+    // Idempotency guard: a client-side bug (since fixed) could resubmit this
+    // repeatedly for an already-onboarded user, silently overwriting real
+    // profile data with stale wizard state on every retry. Once onboarding
+    // is complete, this endpoint is a no-op — edits belong in PUT /users/profile.
+    const existing = await this.prisma.userProfile.findUnique({ where: { userId } });
+    if (existing?.onboardingCompleted) {
+      return { profile: existing, message: 'Onboarding was already completed.' };
+    }
+
     const profile = await this.prisma.userProfile.upsert({
       where: { userId },
       update: { ...dto, onboardingCompleted: true },
       create: { userId, ...dto, onboardingCompleted: true },
     });
 
-    await this.prisma.bodyMeasurement.create({
-      data: { userId, weightKg: dto.weightKg, bodyFatPct: dto.bodyFatPercentage },
+    const today = startOfDay();
+    await this.prisma.bodyMeasurement.upsert({
+      where: { userId_date: { userId, date: today } },
+      update: { weightKg: dto.weightKg, bodyFatPct: dto.bodyFatPercentage },
+      create: { userId, date: today, weightKg: dto.weightKg, bodyFatPct: dto.bodyFatPercentage },
     });
 
     await this.prisma.streak.createMany({
@@ -63,7 +82,12 @@ export class UsersService {
   }
 
   async addBodyMeasurement(userId: string, data: any) {
-    return this.prisma.bodyMeasurement.create({ data: { userId, ...data } });
+    const date = startOfDay(data.date);
+    return this.prisma.bodyMeasurement.upsert({
+      where: { userId_date: { userId, date } },
+      update: { ...data, date },
+      create: { userId, ...data, date },
+    });
   }
 
   async getBodyMeasurements(userId: string, limit = 30) {

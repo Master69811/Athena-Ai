@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Athena AI",
+    "slug": "athena-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "athena",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#09090f",
+    "ios": {
+      "bundleIdentifier": "ai.athena.app",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "Athena legge sonno, frequenza cardiaca a riposo, HRV e passi dal tuo Apple Watch per calcolare automaticamente il tuo punteggio di recupero.",
+        "NSHealthUpdateUsageDescription": "Athena non scrive dati nell'app Salute, solo lettura.",
+        "UIBackgroundModes": ["fetch", "processing"]
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-notifications",
+      [
+        "react-native-health",
+        {
+          "isClinicalDataEnabled": false,
+          "healthSharePermission": "Athena legge i dati di Salute per calcolare il tuo recupero.",
+          "healthUpdatePermission": "Athena non aggiorna i dati di Salute."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "https://CHANGE_ME.onrender.com"
+    }
+  }
+}
