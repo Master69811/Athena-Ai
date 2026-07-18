@@ -34,4 +34,10 @@ export class AnalyticsController {
   async frequency(@CurrentUser('id') userId: string, @Query('weeks') weeks?: number) {
     return this.analyticsService.getTrainingFrequency(userId, weeks);
   }
+
+  @Get('strength-score')
+  @ApiOperation({ summary: 'Overall Strength Score with push/pull/legs subscores' })
+  async strengthScore(@CurrentUser('id') userId: string) {
+    return this.analyticsService.getStrengthScore(userId);
+  }
 }

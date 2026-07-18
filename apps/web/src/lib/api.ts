@@ -172,6 +172,7 @@ export const analyticsApi = {
   volumeTrend: (weeks?: number) => api.get('/analytics/volume/trend', { params: { weeks } }),
   strength: (exerciseId: string) => api.get(`/analytics/strength/${exerciseId}`),
   frequency: (weeks?: number) => api.get('/analytics/frequency', { params: { weeks } }),
+  strengthScore: () => api.get('/analytics/strength-score'),
 };
 
 // Gamification

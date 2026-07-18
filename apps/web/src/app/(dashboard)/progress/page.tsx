@@ -2,15 +2,85 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { usersApi } from '@/lib/api';
+import { usersApi, analyticsApi } from '@/lib/api';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
 import {
   AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip,
 } from 'recharts';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Dumbbell } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+
+/* ── Strength Score (Gravl-style headline metric) ── */
+function StrengthScoreCard() {
+  const { data } = useQuery({
+    queryKey: ['strength-score'],
+    queryFn: analyticsApi.strengthScore,
+    select: (res: any) => res.data,
+  });
+
+  const overall = data?.overall ?? 0;
+  const hasData = !!data?.hasData;
+  const subscores: any[] = data?.subscores ?? [];
+  const r = (150 - 12) / 2;
+  const circ = 2 * Math.PI * r;
+  const color = overall >= 65 ? 'hsl(var(--success))' : overall >= 45 ? 'hsl(var(--warning))' : 'hsl(var(--primary))';
+
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+        <span className="label-caps">Strength Score</span>
+        {hasData && (
+          <span className="chip chip-active" style={{ height: 24 }}>{data.level}</span>
+        )}
+      </div>
+
+      {hasData ? (
+        <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 24, alignItems: 'center' }}>
+          {/* Ring */}
+          <div style={{ position: 'relative', width: 150, height: 150, margin: '0 auto' }}>
+            <svg width={150} height={150} style={{ transform: 'rotate(-90deg)', display: 'block' }}>
+              <circle cx={75} cy={75} r={r} fill="none" stroke="hsl(var(--surface-3))" strokeWidth={12} />
+              <circle cx={75} cy={75} r={r} fill="none" stroke={color} strokeWidth={12} strokeLinecap="round"
+                strokeDasharray={circ} strokeDashoffset={circ * (1 - overall / 100)}
+                style={{ transition: 'stroke-dashoffset .9s cubic-bezier(.4,0,.2,1)' }} />
+            </svg>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <span className="tabular-nums" style={{ fontSize: 44, fontWeight: 700, lineHeight: 1, color: 'hsl(var(--foreground))' }}>{overall}</span>
+              <span className="text-caption text-content-tertiary">/ 100</span>
+            </div>
+          </div>
+
+          {/* Subscores */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {subscores.map((s) => (
+              <div key={s.key}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{s.label}</span>
+                  <span className="text-caption text-content-secondary tabular-nums">
+                    {s.score}{s.best1RM ? ` · ${s.bestLift} ${s.best1RM}kg` : ''}
+                  </span>
+                </div>
+                <div style={{ height: 8, background: 'hsl(var(--surface-3))', borderRadius: 9999, overflow: 'hidden' }}>
+                  <div style={{ width: `${s.score}%`, height: '100%', borderRadius: 9999, background: color, transition: 'width .8s ease' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, padding: '20px 0', textAlign: 'center' }}>
+          <div className="w-14 h-14 rounded-2xl bg-primary/12 flex items-center justify-center">
+            <Dumbbell size={24} className="text-primary" />
+          </div>
+          <span className="text-body text-content-secondary">Registra i tuoi allenamenti per calcolare il tuo Strength Score.</span>
+          <span className="text-caption text-content-tertiary">Spinta · Tirata · Gambe, valutati sul tuo peso corporeo.</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* Maps real BodyMeasurement fields (from the API) to their display labels */
 const MEASUREMENT_FIELDS: { key: string; label: string }[] = [
@@ -112,6 +182,9 @@ export default function ProgressPage() {
   return (
     <>
       <div className="animate-fade-up" style={{ maxWidth: 1180, display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+        {/* Strength Score — headline metric */}
+        <StrengthScoreCard />
 
         {/* Row 1: two area charts */}
         <div className="resp-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
