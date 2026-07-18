@@ -9,30 +9,30 @@ import { Topbar } from './topbar';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, hasHydrated } = useAuthStore();
 
   useEffect(() => {
+    // CRITICAL: do nothing until zustand-persist has rehydrated from
+    // localStorage. On the first client render the store holds its initial
+    // state (isAuthenticated:false) even for a genuinely logged-in user;
+    // acting before hydration finishes bounced people straight back to
+    // /login right after a successful login — the "black screen" loop.
+    if (!hasHydrated) return;
+
     if (!isAuthenticated) {
-      // Break the redirect loop: middleware gates routes purely on the
-      // 'athena_session' cookie. If the local auth store is empty but a
-      // stale cookie survives (e.g. tokens invalidated server-side while
-      // an older client version cleared localStorage without the cookie),
-      // /login would bounce back here forever, rendering a blank screen.
-      // Clearing the cookie first lets /login actually render.
-      document.cookie = 'athena_session=; path=/; max-age=0';
       router.replace('/login');
       return;
     }
     if (user && user.profile && !user.profile.onboardingCompleted) {
       router.replace('/onboarding');
     }
-  }, [isAuthenticated, user, router]);
+  }, [hasHydrated, isAuthenticated, user, router]);
 
-  if (!isAuthenticated) {
-    // Never leave a pure-black screen while the redirect happens.
+  // Show a spinner (never a blank screen) while hydrating or redirecting.
+  if (!hasHydrated || !isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 rounded-full border-2 border-border-strong border-t-primary animate-spin" aria-label="Reindirizzamento..." />
+        <div className="w-8 h-8 rounded-full border-2 border-border-strong border-t-primary animate-spin" aria-label="Caricamento..." />
       </div>
     );
   }

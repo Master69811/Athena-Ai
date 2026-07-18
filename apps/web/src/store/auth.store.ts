@@ -14,6 +14,12 @@ interface AuthStore {
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
+  // False until zustand-persist has rehydrated from localStorage. Route
+  // guards MUST wait for this before acting, otherwise the first client
+  // render (initial state, isAuthenticated:false) would bounce a genuinely
+  // logged-in user out before their persisted state loads.
+  hasHydrated: boolean;
+  setHasHydrated: (v: boolean) => void;
   setAuth: (user: User, accessToken: string, refreshToken: string) => void;
   setUser: (user: User) => void;
   logout: () => void;
@@ -26,6 +32,8 @@ export const useAuthStore = create<AuthStore>()(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
+      hasHydrated: false,
+      setHasHydrated: (v) => set({ hasHydrated: v }),
       setAuth: (user, accessToken, refreshToken) => {
         if (typeof document !== 'undefined') {
           // 7 days — must match JWT_REFRESH_EXPIRES_IN so the route gate
@@ -50,6 +58,9 @@ export const useAuthStore = create<AuthStore>()(
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     },
   ),
 );
