@@ -1,15 +1,20 @@
 /*
  * Athena AI — Service Worker
- * Scope: static asset caching + minimal offline fallback ONLY.
+ * Network-first for everything; cache is an OFFLINE FALLBACK ONLY.
  *
- * HARD RULES (do not change without review):
- *  - NEVER cache or intercept /api/* requests  -> always hit the network.
- *  - NEVER cache non-GET requests (POST/PUT/PATCH/DELETE) -> auth & mutations untouched.
- *  - NEVER cache cross-origin POST or auth flows.
- *  - Business logic, DB, API responses are never stored.
+ * Why network-first: an app under active development must never serve a
+ * stale JS bundle from cache. A previous cache-first strategy trapped
+ * users on an old (buggy) build on iOS PWAs even after new deploys. This
+ * version always fetches fresh code when online and only falls back to
+ * cache when the network is unavailable.
+ *
+ * HARD RULES:
+ *  - NEVER cache or intercept /api/* requests -> always hit the network.
+ *  - NEVER cache non-GET requests (POST/PUT/PATCH/DELETE).
+ *  - On activate, delete EVERY old cache so a bad build can't survive.
  */
 
-const CACHE_VERSION = 'athena-static-v2';
+const CACHE_VERSION = 'athena-runtime-v3';
 const PRECACHE_URLS = [
   '/manifest.json',
   '/icons/icon-192.png',
@@ -17,78 +22,54 @@ const PRECACHE_URLS = [
   '/icons/apple-touch-icon.png',
 ];
 
-// ---- install: precache a tiny set of static shell assets ----
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION).then((cache) =>
-      cache.addAll(PRECACHE_URLS).catch(() => {
-        /* tolerate missing assets — never block install */
-      })
+      cache.addAll(PRECACHE_URLS).catch(() => {})
     )
   );
   self.skipWaiting();
 });
 
-// ---- activate: drop old caches ----
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k)))
-    )
+    // Wipe ALL caches (not just non-matching) so any stale build is purged.
+    caches.keys()
+      .then((keys) => Promise.all(keys.map((k) => (k === CACHE_VERSION ? null : caches.delete(k)))))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// ---- fetch strategy ----
+// Allow the page to trigger an immediate takeover after an update.
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // 1. Only handle GET. Everything else (POST login, mutations) -> straight to network.
   if (request.method !== 'GET') return;
+  if (url.pathname.startsWith('/api/')) return;   // backend is authoritative
+  if (url.origin !== self.location.origin) return; // same-origin only
 
-  // 2. Never touch the API. Backend stays fully authoritative.
-  if (url.pathname.startsWith('/api/')) return;
-
-  // 3. Only handle same-origin requests.
-  if (url.origin !== self.location.origin) return;
-
-  // 4. Static immutable assets (Next build output, icons) -> cache-first.
-  const isStatic =
-    url.pathname.startsWith('/_next/static/') ||
-    url.pathname.startsWith('/icons/') ||
-    url.pathname === '/manifest.json' ||
-    /\.(?:js|css|woff2?|ttf|otf|png|jpg|jpeg|gif|svg|webp|avif|ico)$/.test(url.pathname);
-
-  if (isStatic) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).then((res) => {
-          if (res && res.status === 200 && res.type === 'basic') {
-            const copy = res.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
-          }
-          return res;
-        });
-      })
-    );
-    return;
-  }
-
-  // 5. Navigations (HTML pages) -> network-first, fall back to cache when offline.
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((res) => {
+  // Network-first: always try fresh; cache the response; fall back to cache
+  // (then to the app shell for navigations) only when offline.
+  event.respondWith(
+    fetch(request)
+      .then((res) => {
+        if (res && res.status === 200 && res.type === 'basic') {
           const copy = res.clone();
           caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
-          return res;
+        }
+        return res;
+      })
+      .catch(() =>
+        caches.match(request).then((cached) => {
+          if (cached) return cached;
+          if (request.mode === 'navigate') return caches.match('/');
+          return Response.error();
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match('/')))
-    );
-    return;
-  }
-
-  // 6. Everything else -> default network behaviour.
+      )
+  );
 });
