@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { recoveryApi } from '@/lib/api';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
-import { Moon, Battery, Brain, Footprints } from 'lucide-react';
+import { Moon, Battery, Brain, Footprints, Activity, HeartPulse } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface RecoveryModalProps {
@@ -45,6 +45,8 @@ export function RecoveryModal({ open, onClose }: RecoveryModalProps) {
   const [stressLevel, setStressLevel] = useState(4);
   const [energyLevel, setEnergyLevel] = useState(7);
   const [steps, setSteps] = useState('');
+  const [hrv, setHrv] = useState('');
+  const [restingHR, setRestingHR] = useState('');
 
   const mutation = useMutation({
     mutationFn: (data: any) => recoveryApi.log(data),
@@ -70,6 +72,10 @@ export function RecoveryModal({ open, onClose }: RecoveryModalProps) {
     };
     const s = parseInt(steps, 10);
     if (!isNaN(s) && s >= 0) payload.steps = s;
+    const h = parseInt(hrv, 10);
+    if (!isNaN(h) && h >= 0) payload.hrv = h;
+    const r = parseInt(restingHR, 10);
+    if (!isNaN(r) && r >= 0) payload.restingHR = r;
     mutation.mutate(payload);
   };
 
@@ -90,6 +96,32 @@ export function RecoveryModal({ open, onClose }: RecoveryModalProps) {
             value={steps}
             onChange={(e) => setSteps(e.target.value)}
             placeholder="es. 8000"
+            className="input-field w-full"
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium flex items-center gap-2 mb-2">
+            <Activity className="w-4 h-4 text-primary" /> HRV (ms) — opzionale
+          </label>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={hrv}
+            onChange={(e) => setHrv(e.target.value)}
+            placeholder="es. 45"
+            className="input-field w-full"
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium flex items-center gap-2 mb-2">
+            <HeartPulse className="w-4 h-4 text-primary" /> Frequenza cardiaca a riposo (bpm) — opzionale
+          </label>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={restingHR}
+            onChange={(e) => setRestingHR(e.target.value)}
+            placeholder="es. 60"
             className="input-field w-full"
           />
         </div>

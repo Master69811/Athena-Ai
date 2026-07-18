@@ -9,7 +9,7 @@
  *  - Business logic, DB, API responses are never stored.
  */
 
-const CACHE_VERSION = 'athena-static-v1';
+const CACHE_VERSION = 'athena-static-v2';
 const PRECACHE_URLS = [
   '/manifest.json',
   '/icons/icon-192.png',
