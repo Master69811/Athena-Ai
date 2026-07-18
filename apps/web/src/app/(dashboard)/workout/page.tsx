@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { workoutApi } from '@/lib/api';
 import { toast } from 'sonner';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, Play } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { getMuscleGroupLabel } from '@/lib/utils';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
@@ -29,11 +30,13 @@ const todayDayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
 
 export default function WorkoutPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
   const [methodology, setMethodology] = useState('PPL');
   const [daysPerWeek, setDaysPerWeek] = useState(4);
   const [duration, setDuration] = useState(60);
+  const [detailDay, setDetailDay] = useState<any | null>(null);
 
   const { data: plan, isLoading, isError, refetch } = useQuery({
     queryKey: ['active-plan'],
@@ -177,9 +180,11 @@ export default function WorkoutPage() {
                 ? Math.max(...dayExercises.map((e: any) => e.rpeTarget ?? 0))
                 : 0;
               return (
-                <div
+                <button
                   key={day.id ?? i}
-                  className={`card card-interactive${isToday ? ' border-primary/25' : ''}`}
+                  type="button"
+                  onClick={() => setDetailDay(day)}
+                  className={`card card-interactive text-left w-full${isToday ? ' border-primary/25' : ''}`}
                 >
                   {/* Top row: day label + RPE badge */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -226,13 +231,13 @@ export default function WorkoutPage() {
                         </div>
                       ))}
                       {day.exercises.length > 4 && (
-                        <span style={{ color: 'hsl(var(--content-tertiary))', fontSize: 11, marginTop: 2 }}>
-                          +{day.exercises.length - 4} altri
+                        <span className="text-primary" style={{ fontSize: 11, marginTop: 4, fontWeight: 600 }}>
+                          +{day.exercises.length - 4} altri · tocca per vedere tutti
                         </span>
                       )}
                     </div>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
@@ -329,6 +334,54 @@ export default function WorkoutPage() {
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* ── Dettaglio giorno: tutti gli esercizi + inizia ── */}
+      <Modal
+        open={!!detailDay}
+        onClose={() => setDetailDay(null)}
+        title={detailDay?.name ?? 'Allenamento'}
+        description={(detailDay?.muscleGroups ?? []).map((mg: string) => getMuscleGroupLabel(mg)).join(' · ')}
+      >
+        {detailDay && (
+          <div className="space-y-4">
+            <div className="space-y-2 max-h-[46vh] overflow-y-auto no-scrollbar">
+              {(detailDay.exercises ?? []).map((ex: any, j: number) => (
+                <div key={ex.id ?? j} className="card-inner">
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+                      {j + 1}. {ex.exercise?.name ?? ex.name}
+                    </span>
+                    <span className="text-caption text-primary" style={{ flexShrink: 0, fontWeight: 600 }}>
+                      {ex.sets}×{ex.repsMin}–{ex.repsMax}
+                    </span>
+                  </div>
+                  <div className="text-caption text-content-tertiary" style={{ marginTop: 4 }}>
+                    {ex.rpeTarget ? `RPE ${ex.rpeTarget}` : ''}
+                    {ex.restSeconds ? ` · riposo ${ex.restSeconds}s` : ''}
+                  </div>
+                  {ex.notes && (
+                    <div className="text-caption text-content-secondary" style={{ marginTop: 6, lineHeight: 1.4 }}>
+                      {ex.notes}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="gradient"
+              className="w-full"
+              onClick={() => router.push(`/workout/session?day=${detailDay.id}`)}
+            >
+              <Play size={16} />
+              Inizia questo allenamento
+            </Button>
+            <p className="text-caption text-content-tertiary text-center">
+              Durante la sessione registri peso, ripetizioni e RPE di ogni serie. Athena userà lo storico per la progressione settimanale.
+            </p>
+          </div>
+        )}
       </Modal>
     </div>
   );

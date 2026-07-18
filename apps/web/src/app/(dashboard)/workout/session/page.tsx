@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { sessionsApi, workoutApi, recoveryApi } from '@/lib/api';
+import { sessionsApi, workoutApi, recoveryApi, progressionApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { useWorkoutStore } from '@/store/workout.store';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { X, Check, Plus, Minus, Gauge } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,8 @@ const fmt = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${
 
 export default function SessionPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const targetDayId = searchParams.get('day');
   const queryClient = useQueryClient();
   const { activeSessionId, startSession, addSet: addSetToStore, endSession, nextExercise } = useWorkoutStore();
 
@@ -107,16 +109,34 @@ export default function SessionPage() {
     mutationFn: ({ sessionId, data }: any) => sessionsApi.complete(sessionId, data),
     onSuccess: () => {
       endSession();
+      // Run the AI progression engine on the freshly-logged sets so the
+      // week-over-week recommendations update. Fire-and-forget: never block
+      // or fail the completion on it.
+      progressionApi.run()
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ['progression-insights-dashboard'] });
+          queryClient.invalidateQueries({ queryKey: ['progression-insights'] });
+        })
+        .catch(() => {});
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['gamification-streaks'] });
-      toast.success('Allenamento completato! Ottimo lavoro!');
+      queryClient.invalidateQueries({ queryKey: ['active-plan'] });
+      toast.success('Allenamento completato! Athena aggiorna la progressione.');
       router.push('/workout/history');
     },
     onError: (e: any) => toast.error(e?.message || 'Impossibile completare la sessione'),
   });
 
-  const currentDay = activePlan?.days?.[0];
+  // Train the day the user picked on the workout page (?day=<id>); fall back
+  // to today's day, then the first day. Previously this was hardcoded to
+  // days[0], so only the first day could ever be trained/tracked.
+  const days = activePlan?.days ?? [];
+  const todayIdx = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+  const currentDay =
+    (targetDayId && days.find((d: any) => d.id === targetDayId)) ||
+    days.find((d: any) => d.dayIndex === todayIdx) ||
+    days[0];
   const exercises = currentDay?.exercises || [];
   const currentExercise = exercises[currentExIdx];
   const totalExercises = exercises.length;
