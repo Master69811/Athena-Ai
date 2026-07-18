@@ -13,6 +13,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isAuthenticated) {
+      // Break the redirect loop: middleware gates routes purely on the
+      // 'athena_session' cookie. If the local auth store is empty but a
+      // stale cookie survives (e.g. tokens invalidated server-side while
+      // an older client version cleared localStorage without the cookie),
+      // /login would bounce back here forever, rendering a blank screen.
+      // Clearing the cookie first lets /login actually render.
+      document.cookie = 'athena_session=; path=/; max-age=0';
       router.replace('/login');
       return;
     }
@@ -21,7 +28,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, user, router]);
 
-  if (!isAuthenticated) return null;
+  if (!isAuthenticated) {
+    // Never leave a pure-black screen while the redirect happens.
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 rounded-full border-2 border-border-strong border-t-primary animate-spin" aria-label="Reindirizzamento..." />
+      </div>
+    );
+  }
 
   return (
     <div
