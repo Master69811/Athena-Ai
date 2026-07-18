@@ -113,7 +113,7 @@ export default function AchievementsPage() {
             </div>
           </div>
         ) : (
-          <div style={{
+          <div className="resp-tiles" style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))',
             gap: 16,

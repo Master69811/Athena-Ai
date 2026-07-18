@@ -291,13 +291,13 @@ export default function SessionPage() {
       )}
 
       {/* ── Two-column layout ──────────────────────────── */}
-      <div style={{
+      <div className="resp-stack" style={{
         display: 'grid', gridTemplateColumns: 'clamp(220px,300px,300px) 1fr', gap: 20,
         alignItems: 'start',
       }}>
 
-        {/* LEFT — exercise list */}
-        <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {/* LEFT — exercise list (below the main card on phones) */}
+        <div className="card order-2 md:order-1" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {exercises.map((ex: any, i: number) => {
             const exSets = completedSets.filter(s => s.exerciseId === ex.exerciseId);
             const isActive = i === currentExIdx;
@@ -347,8 +347,8 @@ export default function SessionPage() {
           })}
         </div>
 
-        {/* RIGHT — main exercise card */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* RIGHT — main exercise card (on top on phones) */}
+        <div className="order-1 md:order-2" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {currentExercise ? (
             <div className="card">
