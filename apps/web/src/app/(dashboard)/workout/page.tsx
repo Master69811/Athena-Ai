@@ -7,14 +7,33 @@ import { toast } from 'sonner';
 import { Loader2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { getMuscleGroupLabel } from '@/lib/utils';
+import { Modal } from '@/components/ui/modal';
+import { Button } from '@/components/ui/button';
 
 const DAY_NAMES_SHORT = ['LUN', 'MAR', 'MER', 'GIO', 'VEN', 'SAB', 'DOM'];
+
+// Same training styles offered at onboarding — the user can pick a different
+// one here and Athena regenerates the whole plan around it.
+const METHODOLOGIES = [
+  { value: 'PPL', label: 'Push Pull Legs', desc: 'Classico e versatile' },
+  { value: 'UPPER_LOWER', label: 'Upper / Lower', desc: 'Alta frequenza, ideale 4 giorni' },
+  { value: 'FIVE_THREE_ONE', label: '5/3/1 (Wendler)', desc: 'Forza a progressione lineare' },
+  { value: 'RENAISSANCE_PERIODIZATION', label: 'Renaissance Period.', desc: 'MEV/MAV/MRV per ipertrofia' },
+  { value: 'PROJECT_INVICTUS', label: 'Project Invictus', desc: 'Evidence-based italiano' },
+  { value: 'JUGGERNAUT', label: 'Juggernaut', desc: 'Forza + ipertrofia ondulata' },
+  { value: 'HEAVY_DUTY', label: 'Heavy Duty', desc: 'Alta intensità, basso volume' },
+  { value: 'HYBRID_ATHLETE', label: 'Hybrid Athlete', desc: 'Forza + condizionamento' },
+];
 
 const todayDayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
 
 export default function WorkoutPage() {
   const queryClient = useQueryClient();
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const [styleOpen, setStyleOpen] = useState(false);
+  const [methodology, setMethodology] = useState('PPL');
+  const [daysPerWeek, setDaysPerWeek] = useState(4);
+  const [duration, setDuration] = useState(60);
 
   const { data: plan, isLoading, isError, refetch } = useQuery({
     queryKey: ['active-plan'],
@@ -23,13 +42,18 @@ export default function WorkoutPage() {
   });
 
   const generateMutation = useMutation({
-    mutationFn: workoutApi.generateAI,
+    mutationFn: (opts?: { methodology?: string; trainingDaysPerWeek?: number; sessionDurationMinutes?: number }) =>
+      workoutApi.generateAI(opts),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['active-plan'] });
-      toast.success('Piano AI generato! Athena ha creato il tuo programma personalizzato.');
+      setStyleOpen(false);
+      toast.success('Piano AI generato! Athena ha creato la tua scheda personalizzata.');
     },
     onError: () => toast.error('Errore nella generazione. Riprova.'),
   });
+
+  const generateWithStyle = () =>
+    generateMutation.mutate({ methodology, trainingDaysPerWeek: daysPerWeek, sessionDurationMinutes: duration });
 
   const days: any[] = plan?.days ?? [];
   const totalWeeks: number = plan?.durationWeeks ?? 12;
@@ -87,18 +111,12 @@ export default function WorkoutPage() {
             Genera un programma personalizzato con Athena AI.
           </p>
           <button
-            onClick={() => generateMutation.mutate()}
+            onClick={() => setStyleOpen(true)}
             disabled={generateMutation.isPending}
             className="btn-hero inline-flex items-center gap-2 rounded-xl px-7 h-11 text-sm font-semibold"
           >
-            {generateMutation.isPending ? (
-              'Generazione...'
-            ) : (
-              <>
-                <Sparkles size={16} />
-                Genera Piano AI
-              </>
-            )}
+            <Sparkles size={16} />
+            Scegli stile e genera
           </button>
         </div>
       ) : (
@@ -222,7 +240,7 @@ export default function WorkoutPage() {
           {/* Rigenera */}
           <div style={{ marginTop: 28, display: 'flex', gap: 12 }}>
             <button
-              onClick={() => generateMutation.mutate()}
+              onClick={() => setStyleOpen(true)}
               disabled={generateMutation.isPending}
               className="btn-secondary inline-flex items-center gap-2 rounded-xl px-5 h-10 text-sm"
             >
@@ -231,11 +249,87 @@ export default function WorkoutPage() {
               ) : (
                 <Sparkles size={16} />
               )}
-              {generateMutation.isPending ? 'Generazione...' : 'Genera nuovo piano AI'}
+              {generateMutation.isPending ? 'Generazione...' : 'Cambia stile e rigenera'}
             </button>
           </div>
         </>
       )}
+
+      {/* ── Scelta stile di allenamento ── */}
+      <Modal
+        open={styleOpen}
+        onClose={() => !generateMutation.isPending && setStyleOpen(false)}
+        title="Scegli il tuo stile"
+        description="Athena costruisce la scheda con esercizi, serie e ripetizioni sullo stile scelto."
+      >
+        <div className="space-y-5">
+          <div>
+            <p className="label-caps mb-2">Metodologia</p>
+            <div className="grid grid-cols-2 gap-2">
+              {METHODOLOGIES.map(m => (
+                <button
+                  key={m.value}
+                  type="button"
+                  onClick={() => setMethodology(m.value)}
+                  className={`text-left rounded-xl p-3 border transition-colors ${
+                    methodology === m.value
+                      ? 'border-primary bg-primary/10'
+                      : 'border-border bg-surface-3'
+                  }`}
+                >
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{m.label}</div>
+                  <div className="text-caption text-content-tertiary">{m.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="label-caps mb-2">Giorni a settimana</p>
+            <div className="flex gap-2">
+              {[2, 3, 4, 5, 6].map(d => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDaysPerWeek(d)}
+                  className={`flex-1 h-10 rounded-xl text-sm font-bold transition-colors ${
+                    daysPerWeek === d ? 'bg-primary text-white' : 'bg-surface-3 text-content-secondary'
+                  }`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="label-caps mb-2">Durata sessione</p>
+            <div className="flex gap-2">
+              {[45, 60, 75, 90].map(m => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setDuration(m)}
+                  className={`flex-1 h-10 rounded-xl text-xs font-bold transition-colors ${
+                    duration === m ? 'bg-primary text-white' : 'bg-surface-3 text-content-secondary'
+                  }`}
+                >
+                  {m}m
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setStyleOpen(false)} disabled={generateMutation.isPending}>
+              Annulla
+            </Button>
+            <Button type="button" variant="gradient" className="flex-1" onClick={generateWithStyle} loading={generateMutation.isPending}>
+              {generateMutation.isPending ? 'Genero la scheda…' : 'Genera scheda'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -13,7 +13,27 @@ export class AiWorkoutService {
     this.genAI = new GoogleGenerativeAI(this.configService.get('GEMINI_API_KEY', ''));
   }
 
-  async generateWorkoutPlan(userId: string) {
+  async generateWorkoutPlan(
+    userId: string,
+    overrides?: {
+      methodology?: string;
+      goalType?: string;
+      trainingDaysPerWeek?: number;
+      sessionDurationMinutes?: number;
+    },
+  ) {
+    // If the user picked a different training style (or days/duration) on the
+    // workout page, persist it to their profile first so the whole app stays
+    // consistent and the AI prompt below reflects the new choice.
+    const patch: Record<string, any> = {};
+    if (overrides?.methodology) patch.methodology = overrides.methodology;
+    if (overrides?.goalType) patch.goalType = overrides.goalType;
+    if (typeof overrides?.trainingDaysPerWeek === 'number') patch.trainingDaysPerWeek = overrides.trainingDaysPerWeek;
+    if (typeof overrides?.sessionDurationMinutes === 'number') patch.sessionDurationMinutes = overrides.sessionDurationMinutes;
+    if (Object.keys(patch).length > 0) {
+      await this.prisma.userProfile.update({ where: { userId }, data: patch });
+    }
+
     const profile = await this.prisma.userProfile.findUnique({ where: { userId } });
     if (!profile) throw new NotFoundException('Profile not found. Complete onboarding first.');
 

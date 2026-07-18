@@ -16,8 +16,8 @@ export class AiWorkoutController {
   @SetMetadata(AI_TYPE_KEY, 'workout')
   @UseGuards(AiRateLimitGuard)
   @ApiOperation({ summary: 'Generate AI workout plan' })
-  async generate(@CurrentUser('id') userId: string) {
-    return this.aiWorkoutService.generateWorkoutPlan(userId);
+  async generate(@CurrentUser('id') userId: string, @Body() body: any) {
+    return this.aiWorkoutService.generateWorkoutPlan(userId, body ?? {});
   }
 
   @Post('set-recommendation')

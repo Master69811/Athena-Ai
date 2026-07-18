@@ -98,7 +98,8 @@ export const workoutApi = {
   getPlan: (id: string) => api.get(`/workout-plans/${id}`),
   activatePlan: (id: string) => api.put(`/workout-plans/${id}/activate`),
   deletePlan: (id: string) => api.delete(`/workout-plans/${id}`),
-  generateAI: () => api.post('/ai-workout/generate'),
+  generateAI: (opts?: { methodology?: string; goalType?: string; trainingDaysPerWeek?: number; sessionDurationMinutes?: number }) =>
+    api.post('/ai-workout/generate', opts ?? {}),
 };
 
 // Sessions
