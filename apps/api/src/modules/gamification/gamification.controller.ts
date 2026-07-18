@@ -29,4 +29,10 @@ export class GamificationController {
     const awarded = await this.gamificationService.checkAndAwardAchievements(userId);
     return { awarded };
   }
+
+  @Get('level')
+  @ApiOperation({ summary: 'Get XP and level progression' })
+  async getLevel(@CurrentUser('id') userId: string) {
+    return this.gamificationService.getLevel(userId);
+  }
 }

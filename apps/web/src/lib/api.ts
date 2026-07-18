@@ -180,6 +180,7 @@ export const gamificationApi = {
   getAchievements: () => api.get('/gamification/achievements'),
   getStreaks: () => api.get('/gamification/streaks'),
   check: () => api.post('/gamification/check'),
+  getLevel: () => api.get('/gamification/level'),
 };
 
 // Progression

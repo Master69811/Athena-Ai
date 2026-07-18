@@ -123,3 +123,22 @@ curl -s -X POST https://athena-ai-ndvj.onrender.com/api/v1/ai-workout/generate \
 - Il progetto usa pnpm/turbo monorepo: `apps/api` (NestJS) + `apps/web` (Next.js)
 - Render free tier: cold start fino a 50s dopo inattività
 - NON esiste ancora una migrazione "seed" per dati demo — il DB è vuoto/pulito in produzione
+
+## 📌 SESSIONE 18/07 — stato aggiornato (Athena → livello Gravl)
+
+**App LIVE e funzionante** (verificata con browser headless su tutte le 16 schermate, zero errori). Frontend Vercel `athena-ai-api.vercel.app`, backend Render `athena-ai-ndvj.onrender.com`. Branch `claude/ai-fitness-platform-Ovwzu`.
+
+**Completato in questa sessione (tutto pushato):**
+- Fix schermata nera al login: attesa idratazione zustand in `app-layout.tsx` (commit ca95739)
+- Service worker network-first + auto-update (fine trappola cache PWA iOS) — `public/sw.js` v3 + `ServiceWorkerRegistration.tsx` (commit 211c70f)
+- Account creatore premium + dati reali: **SQL in `scripts/seed-creator-account.sql`** — DA ESEGUIRE in Supabase SQL Editor (rende andrea.segato1990@gmail.com COACH + recovery/peso/streak reali)
+- Inserimento manuale salute completo: RecoveryModal con HRV + FC riposo (commit 90d413c)
+- Tutte le schermate formato telefono (commit f604e6e)
+- Allenamento: scelta stile/metodologia alla generazione (commit 73abab9), retry generazione AI (7f3c13e), giorni cliccabili + dettaglio tutti esercizi + training per-giorno + trigger progressione (907e186)
+- **Strength Score** (feature-firma Gravl): `analytics.service.getStrengthScore` + `GET /analytics/strength-score` + card in pagina Progress (commit 434b97e)
+
+**IN CORSO (questa richiesta): livelli/XP + istruzioni esercizi nel dettaglio giorno**
+- XP/Livelli: aggiungere `getLevel(userId)` a `gamification.service` (XP da sessioni×100 + PR×25 + punti achievement + streak×10; livello a soglie), endpoint `GET /gamification/level`, `gamificationApi.getLevel`, card livello in pagina achievements
+- Istruzioni esercizi: nel modale dettaglio giorno (`workout/page.tsx`) mostrare `ex.exercise.instructions` (passi) + `ex.exercise.commonMistakes` quando presenti (il piano già include exercise completo)
+
+**Gap Gravl ancora aperti (non fattibili ora):** 300 video dimostrativi (contenuto), Apple Watch nativo (richiede app iOS `apps/mobile` + Apple Developer account).

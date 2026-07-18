@@ -35,6 +35,12 @@ export default function AchievementsPage() {
     select: (res: any) => res.data,
   });
 
+  const { data: level } = useQuery({
+    queryKey: ['gamification-level'],
+    queryFn: gamificationApi.getLevel,
+    select: (res: any) => res.data,
+  });
+
   const achievements: any[] = Array.isArray(data?.achievements) ? data.achievements : [];
 
   const totalPoints  = data?.totalPoints  ?? achievements.filter(a => a.earned).reduce((s: number, a: any) => s + (a.points ?? 0), 0);
@@ -47,6 +53,35 @@ export default function AchievementsPage() {
   return (
     <>
       <div className="animate-fade-up" style={{ maxWidth: 1180 }}>
+
+        {/* ── Level card (XP progression) ── */}
+        {level && (
+          <div className="card border-primary/25" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 20 }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: 16, flexShrink: 0,
+              background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              color: '#fff',
+            }}>
+              <span className="text-caption" style={{ opacity: .85, lineHeight: 1 }}>LIV</span>
+              <span className="tabular-nums" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1 }}>{level.level}</span>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: 'hsl(var(--foreground))' }}>{level.title}</span>
+                <span className="text-caption text-content-secondary tabular-nums">
+                  {level.xpIntoLevel} / {level.xpForNextLevel} XP
+                </span>
+              </div>
+              <div style={{ height: 10, background: 'hsl(var(--surface-3))', borderRadius: 9999, overflow: 'hidden' }}>
+                <div style={{ width: `${level.progressPct}%`, height: '100%', borderRadius: 9999, background: 'linear-gradient(90deg,#6366f1,#8b5cf6)', transition: 'width .8s ease' }} />
+              </div>
+              <div className="text-caption text-content-tertiary" style={{ marginTop: 8 }}>
+                {level.breakdown.sessions} allenamenti · {level.breakdown.personalRecords} record · {level.xp} XP totali
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Points banner ── */}
         <div className="card border-primary/25" style={{

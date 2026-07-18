@@ -365,6 +365,28 @@ export default function WorkoutPage() {
                       {ex.notes}
                     </div>
                   )}
+                  {/* Esecuzione (istruzioni reali dal DB esercizi) */}
+                  {Array.isArray(ex.exercise?.instructions) && ex.exercise.instructions.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <p className="label-caps" style={{ marginBottom: 4 }}>Esecuzione</p>
+                      <ol style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {ex.exercise.instructions.slice(0, 5).map((step: string, k: number) => (
+                          <li key={k} className="text-caption text-content-secondary" style={{ lineHeight: 1.4 }}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                  {/* Errori comuni */}
+                  {Array.isArray(ex.exercise?.commonMistakes) && ex.exercise.commonMistakes.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <p className="label-caps" style={{ marginBottom: 4, color: 'hsl(var(--warning))' }}>Errori da evitare</p>
+                      <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {ex.exercise.commonMistakes.slice(0, 3).map((mk: string, k: number) => (
+                          <li key={k} className="text-caption text-content-tertiary" style={{ lineHeight: 1.4 }}>{mk}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
